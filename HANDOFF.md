@@ -15,10 +15,13 @@ bytecode** (~225 opcodes, binary-tree dispatch) interpreted by a small Lua VM. T
 
 ## 1. Current state (TL;DR)
 
-- `deobf_full.lua` — **5,838 lines, all 56 VM protos emitted** (T2 = main chunk,
-  T8 = payload, + 54 closures), **compiles clean** under the bundled Luau CLI.
-- It is a *register-level reconstruction*: correct control flow and semantics, but still
-  reads VM-ish (see §6 TODO for the exact remaining polish list).
+- `deobf_full.lua` — **5,226 lines, all 56 VM protos emitted** (T2 = main chunk,
+  T8 = payload, + 54 closures), **compiles clean** under the bundled Luau CLI and
+  runs until the first Roblox global (`L14[20] = Path2DControlPoint.new`).
+- Registers are real `local`s, upvalues resolve to the enclosing proto's locals,
+  calls have real argument lists and the constant pool is inlined as literals.
+- §6.1 (source-shaping) is done — see `CHANGES.md` for the itemised list of what
+  changed and what is still open (§6.2-§6.4 are untouched).
 
 ## 2. Quick start
 
@@ -129,26 +132,40 @@ Data formats:
 9. `nupdump.luau` line ~269: the serializer mis-handles boolean constants
    (T/y bool consts suspect until fixed & re-dumped). Known-affected: pool[25]=false,
    pool[26]=true (verified at runtime instead).
+10. `tables.pkl` shares sub-tables by reference (`{'__ref': <id>}`). Any code that
+   reads a nested descriptor must deref through an `__id -> node` index first;
+   the old `r9()` skipped refs and silently produced an empty upvalue map.
+   Likewise, upvalue descriptor keys are 1-based while IR slots are 0-based.
+11. The `===NUP` dump lines are **truncated** (the serialiser cuts at ~5.4k
+   chars), so the recovered pool stops around key 170 and slot 5 is missing
+   entirely. Parse them brace/quote-aware and expect missing keys.
 
 ## 6. TODO — what "finished" means (priority order)
 
 The user's bar: **output should read like hand-written Lua**, not VM pseudo-code.
-Current output is semantically complete but VM-flavored. Remaining polish:
+
+> **Status 2026-09-22: item 1 (source-shaping) is complete.** Every sub-item
+> (1a-1g) is done; details and verification in `CHANGES.md`. Items 2-4 below are
+> still open. The two entries marked FIXED are the bugs that were blocking 1a/1b.
+
+Remaining polish:
 
 1. **Source-shaping (the big one)**
-   - a. Fake upvalue names `UP<n>`: `upval_name()` in assemble.py falls back to `UP<n>`
+   - a. **FIXED** — Fake upvalue names `UP<n>`: `upval_name()` in assemble.py fell back to `UP<n>`
      when the creator instruction wasn't statically decoded — currently affects the 9
      "standalone" protos (T283/303/452/473/498/508/599/609/619; their creation sites use
      `y=('proto',tid)` which decomp.py's closure emit didn't match — it only checked
      numeric y). Fix: make decomp's closure emit accept `('proto',tid)` and re-run; or
      resolve their upvalue chains manually via tables.pkl slot-9 of each proto.
-   - b. Inline `L14[k]` pool refs inside function bodies (build a per-proto env map from
+   - b. **FIXED** — Inline `L14[k]` / pool refs inside function bodies (the pool
+     parser itself was broken: `POOL_RAW` was empty, see §5.10 below) (build a per-proto env map from
      the pool stores and substitute; keep the `L14 = {...}` block as documentation).
    - c. Rename registers to semantic names: `L14[k]` → the global/string it holds;
      dispatcher state var (`a10` etc.) → `state`; string-compared temps → names from
      their comparisons ("wait", "Destroy", "GetAsync"…).
-   - d. Reconstruct real call shapes: the 154 `-- multret` spread-call sites come from
-     `CALL` with 0 fixed args; recover arg counts from register liveness.
+   - d. **FIXED** — Real call shapes: `('spread', lo, hi)` used to render as
+     `f(a..b)` (string concat!); every range is now enumerated, and open-ended
+     spreads fold into the multi-return call that filled them.
    - e. Merge the `do -- for-in loop` / coroutine-desugar markers with their loop bodies
      (op46/op172; sites listed in the session log: T8 instrs 156, 845, 1723, 3143, 3281,
      3437, 3640, 4626; T352; T126).

@@ -44,8 +44,10 @@ def expr_str(e):
         if isinstance(v, float) and v == int(v) and abs(v) < 2**53:
             return str(int(v))
         return repr(v)
-    if t == 'fld' and e[1] == ('E',) and e[2][0] == 'reg':
-        return expr_str(e[2])
+    if t == 'fld' and e[1] == ('E',):
+        if e[2][0] == 'reg':
+            return expr_str(e[2])
+        return 'nil'   # register-file slot whose index the junk ops rewrite at runtime
     if t == 'fld':
         obj, key = e[1], e[2]
         os_ = expr_str(obj)
@@ -88,7 +90,20 @@ def expr_str(e):
         return const_str(e[1])
     if t == 'spread':
         a, b = e[1], e[2]
-        return f"{RN(a)}..top" if b == 'top' else f"{RN(a)}..{RN(b)}"
+        if b == 'top':
+            # open-ended "registers R<a>..top of stack" argument list
+            return f"...--[[registers {RN(a)}..top of stack]]"
+        lo, hi = int(a), int(b)
+        if hi < lo:
+            return ''
+        return ', '.join(RN(i) for i in range(lo, hi + 1))
+    if t == 'spread_after':
+        # R<lo>..R<d-1> followed by every result of the inlined multret call
+        lo, d, cx = int(e[1]), int(e[2]), e[3]
+        pre = [RN(i) for i in range(lo, d)]
+        return ', '.join(pre + [expr_str(cx)])
+    if t == 'callx':
+        return f"{expr_str(e[1])}({', '.join(expr_str(a) for a in e[2])})"
     if t == 'varg':
         return '...'
     if t == 'raw':
@@ -561,7 +576,69 @@ def decode_proto(tid):
         if V == 111:
             emit('opaque', op=V, P=P); continue
         emit('opaque', op=V, P=P)
+    _simplify_regfile(ir)
+    _pair_coroutines(ir)
+    _merge_multret_args(ir)
     return ir
+
+def _simplify_regfile(ir):
+    """`E` is the VM register file, so `E[Rk] = v` / `v = E[Rk]` are plain moves.
+
+    Stores whose index was never decoded (dead code produced by the self-modifying
+    junk ops) become comments instead of a bogus `E[x] = ...` table store."""
+    for e in ir:
+        if e.kind == 'settable' and e.kw.get('obj') == ('E',):
+            k = e.kw.get('key')
+            if isinstance(k, tuple) and k[0] == 'reg' and 'expr_call' not in e.kw:
+                e.kind = 'assign'
+                e.kw = {'dst': k[1], 'expr': e.kw.get('val', const(None))}
+            else:
+                e.kind = 'raw'
+                e.kw = {'txt': '-- (junk op: register-file store with a decoded-at-runtime index)'}
+
+def _pair_coroutines(ir):
+    """pair each coroutine-resume with the wrap that built its iterator triple"""
+    wraps = {}
+    for i, e in enumerate(ir):
+        if e.kind == 'coroutine_wrap':
+            wraps.setdefault(int(e.kw['reg0']), []).append(i)
+    for e in ir:
+        if e.kind == 'coresume':
+            d = int(e.kw['dst'])
+            cand = wraps.get(d)
+            if cand:
+                e.kw['co_reg0'] = int(ir[cand[0]].kw['reg0'])
+
+def _merge_multret_args(ir):
+    """Fold "call f(Ra..top)" after a multret call into one Lua argument list.
+
+    The VM materialises the results of a multi-return call into registers
+    Rd..top and then spreads them into the *next* call.  In source that is just
+    `f(fixed..., g(...))` -- a multi-return call used as the last argument.  We
+    inline the previous call expression at the use site and drop the original
+    statement (it is marked 'consumed' and renders to nothing).
+    """
+    for i, e in enumerate(ir):
+        if e.kind != 'call':
+            continue
+        args = e.kw.get('args') or []
+        if len(args) != 1 or args[0][0] != 'spread' or args[0][2] != 'top':
+            continue
+        lo = args[0][1]
+        j = i - 1
+        while j >= 0 and ir[j].kind in ('close', 'nop', 'forrestore'):
+            j -= 1
+        if j < 0:
+            continue
+        pv = ir[j]
+        if pv.kind != 'call' or pv.kw.get('nret') != 0 or pv.kw.get('dst') is None:
+            continue
+        d = int(pv.kw['dst'])
+        if d < lo:
+            continue
+        e.kw['args'] = [('spread_after', lo, d, ('callx', pv.kw['f'], pv.kw['args']))]
+        pv.kind = 'consumed'
+        pv.kw = {'dst': d}
 
 def RN(i):
     return expr_str(('reg', i))
@@ -583,7 +660,8 @@ LINEFMT = {
     'call':     lambda k: _call_str(k),
     'self':     lambda k: f"{RN(k['dst']+1)} = {expr_str(k['obj'])}; {RN(k['dst'])} = {expr_str(k['obj'])}[{expr_str(k['key'])}]",
     'closure':  lambda k: f"{RN(k['dst'])} = closure T{k['child']}" + (" (with upvals)" if k['upvals'] else ""),
-    'varargs':  lambda k: f"{RN(k['dst'])} = ...  -- varargs fill (multret)",
+    'varargs':  lambda k: (f"{RN(k['dst'])} = ...  -- vararg fill: also writes "
+                           f"R{k['dst']+1}, R{k['dst']+2}, ... (count is runtime dependent)"),
     'varargs_fixed': lambda k: f"__init_params({k['count']}) -- E[R1..R{k['count']}] = first varargs",
     'varargs_count': lambda k: f"{RN(k['dst'])} = x - {RN(k['dst'])} + 1  -- vararg count, max {k['count']}",
     'nilrange': lambda k: ', '.join(RN(k['lo'] + i) for i in range(max(0, int(k['hi']) - k['lo'] + 1))) + " = nil",
@@ -593,7 +671,10 @@ LINEFMT = {
     'forprep':  lambda k: f"for {RN(k['reg0'])},{RN(k['reg0']+1)},{RN(k['reg0']+2)} prep -> body at {k['target']}",
     'forloop':  lambda k: f"for {RN(k['reg0'])} loop-back -> {k['target']}",
     'forrestore': lambda k: "-- for-loop state restore",
-    'coresume': lambda k: f"{RN(k['dst'])},{RN(k['dst']+1)},{RN(k['dst']+2)} = coroutine.resume(coroutine {k['target']}) ; if ok then PC -> {k['target']}",
+    'coresume': lambda k: (f"{RN(k['dst'])}, {RN(k['dst']+1)}, {RN(k['dst']+2)} = "
+                           f"coroutine.resume({RN(k['co_reg0'])}, {RN(k['co_reg0']+1)}, {RN(k['co_reg0']+2)})"
+                           if 'co_reg0' in k else
+                           f"{RN(k['dst'])}, {RN(k['dst']+1)}, {RN(k['dst']+2)} = coroutine.resume(coroutine-{k['target']})"),
     'coroutine_wrap': lambda k: f"-- coroutine for-in: wrapped fn in {RN(k['reg0'])}..{RN(k['reg0']+2)}; body resumes at instr {k['target']} (loop vars picked up there)",
     'opaque':   lambda k: f"-- opaque op {k['op']} (instr {k['P']})",
     'moverange':lambda k: "-- table.move range",
@@ -607,7 +688,7 @@ def _call_str(k):
     args = ', '.join(expr_str(a) for a in k['args'])
     call = f"{expr_str(k['f'])}({args})"
     if k['nret'] == 0:
-        return f"{call}  -- multret"
+        return call                 # results discarded -> plain statement call
     if k['nret'] == 1:
         return f"{RN(k['dst'])} = {call}"
     if k['nret'] > 1:
