@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/home/user/deobf/extract_ops.py", line 105, in <module>
+    walk(items[0], [])
+    ~~~~^^^^^^^^^^^^^^
+  File "/home/user/deobf/extract_ops.py", line 70, in walk
+    walk(block, conds + [cond])
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/deobf/extract_ops.py", line 68, in walk
+    _, branches, eblock = node
+    ^^^^^^^^^^^^^^^^^^^
+ValueError: not enough values to unpack (expected 3, got 2)

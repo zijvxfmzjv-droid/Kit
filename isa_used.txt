@@ -1,0 +1,301 @@
+OP 0: x = m
+
+OP 1: x = z [ P ] E [ x ] ( ) x - = 1
+
+OP 3: m = ( E ) J = z [ P ]
+
+OP 4: ( E ) [ e [ P ] ] = ( y [ P ] )
+
+OP 5: m = E J = e [ P ]
+
+OP 6: [?F?] for Z , Y in F do if not ( Z >= 1 ) then else ( Y ) [ 1 ] = ( Y ) ; Y [ 2 ] = E [ Z ] ; ( Y ) [ 3 ] = 2 ; F [ Z ] = ( nil ) ; end ; end ; m = u [ P ] return false , m , m ;
+
+OP 9: m = z [ P ] J = ( Z - k - 1 ) [?J<0?] J = - 1 ; C = ( 0 ) for Z = m , m + J do E [ Z ] = h [ p + C ] ; C + = 1 ; end ; x = ( m + J )
+
+OP 10: m [ J ] = C
+
+OP 11: m = z [ P ] E [ m ] = E [ m ] ( E [ m + 1 ] ) x = m
+
+OP 14: return true , e [ P ] , 0 ;
+
+OP 16: m = ( n [ z [ P ] ] ) ( m [ 1 ] [ m [ 3 ] ] ) [ E [ u [ P ] ] ] = ( E [ e [ P ] ] )
+
+OP 17: m = ( false ) v + = U m = v <= j
+
+OP 18: m = ( u [ P ] ) ( E ) [ m ] = E [ m ] ( E [ m + 1 ] , E [ m + 2 ] ) x = ( m )
+
+OP 20: 
+
+OP 21: m = ( u [ P ] ) ( E [ m ] ) ( E [ m + 1 ] ) x = ( m - 1 )
+
+OP 22: n [ e [ P ] ] [ y [ P ] ] = T [ P ]
+
+OP 26: x = e [ P ] E [ x ] = E [ x ] ( )
+
+OP 28: [?E[e[P]]==T[P]?]
+
+OP 30: E [ z [ P ] ] [ D [ P ] ] = ( T [ P ] )
+
+OP 32: J = ( e [ P ] )
+
+OP 33: P = z [ P ]
+
+OP 34: m [ J ] = C
+
+OP 38: [?F?] for Z , Y in F do if not ( Z >= 1 ) then else Y [ 1 ] = ( Y ) ; Y [ 2 ] = E [ Z ] ; Y [ 3 ] = 2 ; F [ Z ] = nil ; end ; end ; m = ( u [ P ] ) x = m + 1 return true , m , 2 ;
+
+OP 39: m = E J = ( u [ P ] ) C = E
+
+OP 40: m = ( e [ P ] ) x = ( m + u [ P ] - 1 ) ( E ) [ m ] = E [ m ] ( Q [ 29 ] ( x , m + 1 , E ) ) x = ( m )
+
+OP 42: ( E ) [ e [ P ] ] = E [ z [ P ] ] % E [ u [ P ] ]
+
+OP 44: k = z [ P ] for Z = 1 , k do E [ Z ] = h [ Z ] ; end ; p = ( k + 1 )
+
+OP 46: m = ( e [ P ] ) J , C , K = v ( )
+
+OP 50: ( E ) [ e [ P ] ] = ( E [ u [ P ] ] == y [ P ] )
+
+OP 52: J = ( x ) m = ( m [ J ] )
+
+OP 53: m = e [ P ] J = ( z [ P ] ) C = E [ m ] Q [ 17 ] ( E , m + 1 , x , J + 1 , C )
+
+OP 55: ( m ) ( ) m = x
+
+OP 57: J = D [ P ]
+
+OP 58: m = u [ P ] E [ m ] ( Q [ 29 ] ( x , m + 1 , E ) ) x = m - 1
+
+OP 59: C = ( C [ K ] ) K = ( D [ P ] )
+
+OP 60: E [ u [ P ] ] = n [ e [ P ] ] [ y [ P ] ]
+
+OP 62: m = z [ P ]
+
+OP 63: K = ( K [ a ] ) C + = K m [ J ] = ( C )
+
+OP 64: m = ( e [ P ] ) x = m
+
+OP 65: m = n [ z [ P ] ] ( E ) [ e [ P ] ] = ( m [ 1 ] [ m [ 3 ] ] [ E [ u [ P ] ] ] )
+
+OP 66: E [ u [ P ] ] = ( y [ P ] / E [ e [ P ] ] )
+
+OP 67: ( E ) [ e [ P ] ] = ( E [ u [ P ] ] ~= E [ z [ P ] ] )
+
+OP 68: E [ e [ P ] ] = ( Q [ 6 ] ( E [ u [ P ] ] , y [ P ] ) )
+
+OP 69: for Z = u [ P ] , z [ P ] do E [ Z ] = nil ; end
+
+OP 71: K = ( E ) a = u [ P ]
+
+OP 76: C - = K ( m ) [ J ] = ( C )
+
+OP 78: E [ e [ P ] ] = E [ z [ P ] ] >= E [ u [ P ] ]
+
+OP 79: m = ( nil ) J = nil C = ( 117 ) repeat if C == 117 then m = 22 ; C = ( - 37 + ( ( V ~= V and V or V ) + C + C > V and C  ...JUNK... - 70 + ( Q [ 54 ] [ 13 ] ( ( Q [ 54 ] [ 11 ] ( ( Q [ 54 ] [ 14 ] ( V , V , V ) ) < V and C or V ) ) ) ) ) ; continue ; else m = ( m [ J ] ) ; C = 20 + ( Q [ 54 ] [ 9 ] ( ( Q [ 54 ] [ 7 ] ( ( Q [ 54 ] [ 11 ] ( C , V , V ) ) == V and C or V , ( 10 ) ) ) ) ) ; end ; else ( m ) [ J ] = ( K ) ; break ; end ; end ; end ; end
+
+OP 82: ( E ) [ e [ P ] ] = ( Q [ 35 ] )
+
+OP 84: J = z [ P ] m = m [ J ]
+
+OP 85: C = ( u [ P ] ) J = J [ C ] C = E
+
+OP 86: P = ( e [ P ] )
+
+OP 87: E [ u [ P ] ] = ( E [ e [ P ] ] / y [ P ] )
+
+OP 88: P = u [ P ]
+
+OP 90: m = ( E ) J = x
+
+OP 91: C = E
+
+OP 92: E [ z [ P ] ] = ( c [ T [ P ] ] )
+
+OP 93: E [ e [ P ] ] = ( E [ u [ P ] ] [ E [ z [ P ] ] ] )
+
+OP 94: m = E J = z [ P ] C = D [ P ]
+
+OP 95: C = ( y [ P ] ) ( m ) [ J ] = C
+
+OP 96: K = K [ a ] C ^ = K
+
+OP 98: E [ e [ P ] ] = ( E [ z [ P ] ] * E [ u [ P ] ] )
+
+OP 100: [?E[z[P]]?] P = e [ P ]
+
+OP 101: [?notE[z[P]]?] P = e [ P ]
+
+OP 103: E [ u [ P ] ] = E [ z [ P ] ] == E [ e [ P ] ]
+
+OP 104: ( E ) [ u [ P ] ] = E [ e [ P ] ] // E [ z [ P ] ]
+
+OP 105: x = m m = ( E )
+
+OP 106: C = T [ P ]
+
+OP 107: E [ z [ P ] ] = ( Q [ 47 ] ( E [ u [ P ] ] , D [ P ] ) )
+
+OP 108: m = n [ e [ P ] ] ( E ) [ z [ P ] ] = m [ 1 ] [ m [ 3 ] ] [ T [ P ] ]
+
+OP 109: m = ( E ) J = u [ P ] m = m [ J ]
+
+OP 110: K = ( u [ P ] )
+
+OP 111: for Z = m , J do C = E ; K = Z ; Z = ( nil ) ; C [ K ] = Z ; end
+
+OP 113: J = ( u [ P ] )
+
+OP 114: ( E ) [ e [ P ] ] = n [ u [ P ] ]
+
+OP 115: C = ( E ) K = ( u [ P ] )
+
+OP 116: J = e [ P ] C = n
+
+OP 118: E [ u [ P ] ] = # E [ z [ P ] ]
+
+OP 119: ( E ) [ u [ P ] ] = ( Q [ 3 ] ( E [ e [ P ] ] , y [ P ] ) )
+
+OP 120: 
+
+OP 121: P = e [ P ]
+
+OP 122: ( E ) [ e [ P ] ] = ( E [ z [ P ] ] / E [ u [ P ] ] )
+
+OP 123: K = ( E ) a = ( z [ P ] )
+
+OP 124: E [ e [ P ] ] = ( { } )
+
+OP 125: ( E ) [ e [ P ] ] = R
+
+OP 128: P = ( u [ P ] )
+
+OP 129: ( E ) [ z [ P ] ] = E [ u [ P ] ] <= E [ e [ P ] ]
+
+OP 132: [?E[u[P]]~=E[e[P]]?] P = z [ P ]
+
+OP 133: P = e [ P ]
+
+OP 135: m = E J = ( u [ P ] )
+
+OP 137: E [ u [ P ] ] = y [ P ] + E [ e [ P ] ]
+
+OP 138: [?F?] for R , Z in F do if not ( R >= 1 ) then else ( Z ) [ 1 ] = Z ; ( Z ) [ 2 ] = E [ R ] ; Z [ 3 ] = ( 2 ) ; ( F ) [ R ] = ( nil ) ; end ; end return false , e [ P ] , x ;
+
+OP 139: ( E ) [ u [ P ] ] = ( E [ e [ P ] ] - y [ P ] )
+
+OP 141: ( E ) [ z [ P ] ] = D [ P ] ^ E [ u [ P ] ]
+
+OP 142: K = ( e [ P ] ) C = ( C [ K ] ) K = ( y [ P ] )
+
+OP 144: m = ( u [ P ] ) J = 0 for Z = m , m + ( z [ P ] - 1 ) do ( E ) [ Z ] = h [ p + J ] ; J + = 1 ; end
+
+OP 145: ( E [ e [ P ] ] ) [ E [ u [ P ] ] ] = ( E [ z [ P ] ] )
+
+OP 147: m = n [ e [ P ] ] m [ 1 ] [ m [ 3 ] ] [ y [ P ] ] = ( E [ u [ P ] ] )
+
+OP 148: m = ( e [ P ] ) J = E [ u [ P ] ] ( E ) [ m + 1 ] = J E [ m ] = J [ y [ P ] ]
+
+OP 149: [?E[e[P]]==T[P]?] P = ( z [ P ] )
+
+OP 150: ( E ) [ u [ P ] ] = ( D [ P ] - E [ z [ P ] ] )
+
+OP 151: P = z [ P ]
+
+OP 153: m = ( E ) J = e [ P ]
+
+OP 154: ( E ) [ z [ P ] ] = T [ P ] * E [ e [ P ] ]
+
+OP 155: E [ z [ P ] ] = ( E [ e [ P ] ] % T [ P ] )
+
+OP 156: m = ( z [ P ] ) J = e [ P ] C = ( u [ P ] ) [?J~=0?] x = ( m + J - 1 ) ; K , a = nil [?J~=1?] K , a = Q [ 53 ] ( E [ m ] ( Q [ 29 ] ( x , m + 1 , E ) ) ) [?C~=1?] [?C~=0?] K = ( m + C - 2 ) x = K + 1 ; J = 0 for Z = m , K do J + = 1 ; E [ Z ] = a [ J ] ; end
+
+OP 157: m = n [ u [ P ] ] E [ e [ P ] ] = m [ 1 ] [ m [ 3 ] ]
+
+OP 158: K = ( x ) C = C [ K ] C = C ( )
+
+OP 162: [?E[u[P]]==E[e[P]]?] P = z [ P ]
+
+OP 163: m = m [ J ] J = ( E )
+
+OP 164: m = n [ z [ P ] ] ( m [ 1 ] ) [ m [ 3 ] ] = E [ e [ P ] ]
+
+OP 166: ( E ) [ z [ P ] ] = E [ e [ P ] ] < E [ u [ P ] ]
+
+OP 167: m = ( e [ P ] ) E [ m ] ( E [ m + 1 ] , E [ m + 2 ] ) x = ( m - 1 )
+
+OP 168: E [ e [ P ] ] = nil
+
+OP 169: K = ( e [ P ] )
+
+OP 172: l = { [ 3 ] = U , [ 4 ] = v , [ 5 ] = l , [ 1 ] = j } x = u [ P ] m = Q [ 32 ] ( function ( .. . ) Q [ 33 ] ( ) ; for R , Z in .. . do Q [ 33 ] ( true , R , Z ) ; end ; end ) m ( E [ x ] , E [ x + 1 ] , E [ x + 2 ] ) v = m P = e [ P ]
+
+OP 173: [?F?] for R , Z in F do if not ( R >= 1 ) then else ( Z ) [ 1 ] = Z ; ( Z ) [ 2 ] = E [ R ] ; ( Z ) [ 3 ] = ( 2 ) ; F [ R ] = ( nil ) ; end ; end ; m = ( e [ P ] ) return false , m , m + u [ P ] - 2 ;
+
+OP 174: ( E ) [ z [ P ] ] = not E [ e [ P ] ]
+
+OP 175: E [ e [ P ] ] = Q [ 1 ] ( u [ P ] )
+
+OP 177: C = ( C [ K ] ) K = ( y [ P ] )
+
+OP 179: ( E ) [ u [ P ] ] = E [ z [ P ] ] [ D [ P ] ]
+
+OP 181: E [ u [ P ] ] = - E [ e [ P ] ]
+
+OP 182: ( E ) [ z [ P ] ] = E [ u [ P ] ] * D [ P ]
+
+OP 184: m = e [ P ] E [ m ] = E [ m ] ( Q [ 29 ] ( x , m + 1 , E ) ) x = m
+
+OP 185: J = ( 1 ) m - = J
+
+OP 186: J = ( D [ P ] ) C = T [ P ]
+
+OP 187: K = u [ P ] C = ( C [ K ] )
+
+OP 188: m = y [ P ] J = m [ 9 ] C = # J K = C > 0 and { } a = Q [ 55 ] ( m , K ) Q [ 9 ] ( a , c ) ( E ) [ e [ P ] ] = a [?K?] for R = 1 , C do m = ( J [ R ] ) ; a = ( m [ 1 ] ) ; w = ( m [ 3 ] ) ; if a == 0 then if not F then F = ( { } ) ; end ; I = F [ w ] ; if not I then I = ( { [ 3 ] = w , [ 1 ] = E } ) ; F [ w ] = I ; end ; ( K ) [ R - 1 ] = ( I ) ; else if a ~= 1 then K [ R - 1 ] = n [ w ] ; else ( K ) [ R - 1 ] = E [ w ] ; end ; end ; end
+
+OP 194: ( E ) [ u [ P ] ] = ( E [ e [ P ] ] + y [ P ] )
+
+OP 195: return ;
+
+OP 196: J = ( e [ P ] ) C = E K = u [ P ]
+
+OP 197: m = ( E )
+
+OP 198: v = ( l [ 4 ] ) j = l [ 1 ] U = l [ 3 ] l = ( l [ 5 ] )
+
+OP 201: E [ e [ P ] ] = E [ u [ P ] ]
+
+OP 202: C * = K
+
+OP 204: l = ( { [ 3 ] = U , [ 4 ] = v , [ 5 ] = l , [ 1 ] = j } ) m = u [ P ] U = ( E [ m + 2 ] + 0 ) j = E [ m + 1 ] + 0 v = E [ m ] - U P = ( z [ P ] )
+
+OP 205: C = C [ K ]
+
+OP 206: 
+
+OP 207: m = u [ P ] x = ( m + z [ P ] - 1 ) ( E [ m ] ) ( Q [ 29 ] ( x , m + 1 , E ) ) x = m - 1
+
+OP 208: m = y [ P ] J = m [ 9 ] m = # J C = ( m > 0 and { } ) ; m = O [ T [ P ] ] ( C ) Q [ 9 ] ( m , c ) E [ e [ P ] ] = ( m )
+
+OP 210: ( E ) [ u [ P ] ] = E [ e [ P ] ] - E [ z [ P ] ]
+
+OP 211: K = z [ P ] C = C [ K ]
+
+OP 212: C / = K ( m ) [ J ] = C
+
+OP 215: ( c ) [ T [ P ] ] = ( E [ z [ P ] ] )
+
+OP 216: for R = 1 , z [ P ] do E [ R ] = ( h [ R ] ) ; end
+
+OP 217: E [ u [ P ] ] [ E [ z [ P ] ] ] = ( D [ P ] )
+
+OP 219: E [ z [ P ] ] = ( Q [ 3 ] ( E [ e [ P ] ] , E [ u [ P ] ] ) )
+
+OP 220: E [ u [ P ] ] [ y [ P ] ] = E [ e [ P ] ]
+
+OP 222: ( E ) [ e [ P ] ] = ( E [ u [ P ] ] + E [ z [ P ] ] )
+
+OP 223: J = y [ P ] C = ( E ) K = ( e [ P ] )
+
+OP 224: K = E a = z [ P ]
