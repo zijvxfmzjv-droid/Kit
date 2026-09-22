@@ -12,18 +12,34 @@
 --   * L15          the payload closure (proto T8) built at the end of T2.
 --   * `X = function(...) -- F<n>`   nested VM proto with id n.
 --
--- Naming
---   * a1..aN       parameters of the enclosing proto (VM protos are vararg).
---   * L<n> / v<n>  a proto's own local registers, declared with `local` at the
---                  top of the function so nested protos capture them for real.
---   * A register that a nested proto captures is renamed to <letter><n> when its
---     default name would be shadowed inside that proto.
+-- Naming (all names below are GENERATED -- the original identifiers are not
+--   recoverable, a Luraph build only ships bytecode)
+--   * a<n>         parameter of the enclosing proto (VM protos are vararg).
+--   * fn<n>        register used as a call target (a function value).
+--   * t<n>         table / object that gets indexed.
+--   * k<n>         key used to index a table.
+--   * n<n>         number: arithmetic / comparison operand.
+--   * s<n>         string: concat / string-library operand.
+--   * b<n>         boolean.
+--   * i<n>         numeric `for` counter.
+--   * v<n>         value of mixed or unknown kind.
+--   * state        the VM dispatcher's state register inside a proto.
+--   * <x>Lib       a global library table (stringLib, mathLib, taskLib, ...).
+--
+--   The role letters are a readability hint inferred from how each register is
+--   used, not a claim about its runtime value.  Registers are declared with
+--   `local` at the top of their function so nested protos really capture them,
+--   and every proto keeps its `-- F<n>` marker.
 --
 -- Remaining VM artefacts (documented, not silently "fixed")
 --   * `UPVALS[i]`  upvalue read with a runtime-computed index.
 --   * `<pool>[5]`  the one constant-pool slot the runtime dump did not capture.
 --   * junk ops (op121/92/38/179) rewrite their operands at runtime; those few
 --     sites are commented instead of rendered.
+--   * Empty `while true do end` loops are dispatcher exits whose real outgoing
+--     edge is a junk-op jump.  They are commented out (a bodyless loop cannot
+--     terminate, so emitting them would hang this file before the payload runs).
+--   * The last line is the loader's exit tailcall -- see the comment above it.
 -- ============================================================================
 -- The VM resolves globals through the loader's function environment
 -- (Q[13]() == getfenv()); every `ENV.<name>` below is a real global lookup.
@@ -34,75 +50,75 @@ local ENV = (getfenv and getfenv()) or _G
 
 local L14 = {}  -- Luraph constant pool (keys = constant indices)
 local L15   -- T2 scratch register (holds the payload closure)
-local L2, v3, L4, L5, L6, L7, v8, v9, L10, L11, L12, v16, L18, L21, L24, L29, v38, L45, L46, L49, L53, L55, L57, L58, L59, L61, L67, v73, v74, v76, v84, v85, v88, v99, v103, v104, v107, v110, v113, v117, v128, v164, v166, v176, v186, v214, v460, v468, v529, v605, v623, v629, v658, v666, v680, v684
+local v1, v3, L4, L5, L6, L7, v8, v9, L10, L11, L12, v5, v6, v7, v24, v29, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v84, v25, v26, v27, v28, v104, v30, v31, v32, v33, v34, v35, fn1, v36, v37, v38, v39, v40, v41, v42, v43, v44, v45, v46, v47, v48
 L14[0] = ENV.utf8[0] -- loader-installed helper
-L14[1] = v16 -- runtime: FN:function: ADDR
-L14[2] = L24 -- runtime: FN:function: ADDR
+L14[1] = v5 -- runtime: FN:function: ADDR
+L14[2] = v24 -- runtime: FN:function: ADDR
 L14[3] = task -- static decode: ENV.task
-L14[4] = string -- static decode: v107
+L14[4] = string -- static decode: v30
 L14[5] = v3
-L14[6] = table -- static decode: v73
-L14[7] = coroutine -- static decode: v38
+L14[6] = table -- static decode: v21
+L14[7] = coroutine -- static decode: v10
 L14[8] = "gmatch"
 L14[9] = "format"
 L14[10] = "char"
 L14[11] = v9 -- runtime: FN:function: ADDR
 L14[12] = "match"
-L14[13] = L45 -- runtime: FN:function: ADDR
+L14[13] = v11 -- runtime: FN:function: ADDR
 L14[14] = "find"
 L14[15] = "byte"
 L14[16] = "gsub"
-L14[17] = math -- static decode: L18
+L14[17] = math -- static decode: v6
 L14[18] = "running"
 L14[19] = "sub"
-L14[20] = Path2DControlPoint.new -- static decode: L29
-L14[21] = Instance -- static decode: L49
+L14[20] = Path2DControlPoint.new -- static decode: v29
+L14[21] = Instance -- static decode: v13
 L14[22] = "isyieldable"
-L14[23] = buffer -- static decode: v99
+L14[23] = buffer -- static decode: v27
 L14[24] = "rep"
 L14[25] = false
 L14[26] = true
-L14[27] = v76 -- runtime: FN:function: ADDR
+L14[27] = v23 -- runtime: FN:function: ADDR
 L14[28] = "concat"
 L14[29] = "cancel"
 L14[30] = "unpack"
 L14[31] = "create"
 L14[32] = "resume"
 L14[33] = "yield"
-L14[34] = v186 -- runtime: FN:function: ADDR
+L14[34] = v37 -- runtime: FN:function: ADDR
 L14[35] = "status"
-L14[36] = v605 -- runtime: FN:function: ADDR
-L14[37] = v74 -- runtime: FN:function: ADDR
+L14[36] = v42 -- runtime: FN:function: ADDR
+L14[37] = v22 -- runtime: FN:function: ADDR
 L14[38] = "close"
-L14[39] = L59 -- runtime: FN:function: ADDR
+L14[39] = v18 -- runtime: FN:function: ADDR
 L14[40] = "spawn"
 L14[41] = "defer"
-L14[42] = v110 -- runtime: FN:function: ADDR
+L14[42] = v31 -- runtime: FN:function: ADDR
 L14[43] = v8 -- runtime: FN:function: ADDR
 L14[44] = "readu8"
-L14[45] = debug -- static decode: L58
+L14[45] = debug -- static decode: v17
 L14[46] = "The debug library is required on Luau platforms. Please open a support ticket."
-L14[47] = L21 -- runtime: FN:function: ADDR
+L14[47] = v7 -- runtime: FN:function: ADDR
 L14[48] = "info"
 L14[49] = "traceback"
 L14[50] = "wrap"
 L14[51] = "readu32"
-L14[52] = getfenv -- static decode: v128
+L14[52] = getfenv -- static decode: v34
 L14[53] = "pack"
-L14[54] = L53 -- runtime: FN:function: ADDR
+L14[54] = v14 -- runtime: FN:function: ADDR
 L14[55] = "writeu16"
 L14[56] = "tostring"
 L14[57] = "writeu8"
-L14[58] = CFrame -- static decode: L61
+L14[58] = CFrame -- static decode: v19
 L14[59] = v84 -- runtime: FN:function: ADDR
-L14[60] = Vector2 -- static decode: v117
-L14[61] = Vector3 -- static decode: L46
-L14[62] = v113 -- runtime: FN:function: ADDR
-L14[63] = identifyexecutor -- static decode: L57
+L14[60] = Vector2 -- static decode: v33
+L14[61] = Vector3 -- static decode: v12
+L14[62] = v32 -- runtime: FN:function: ADDR
+L14[63] = identifyexecutor -- static decode: v16
 L14[64] = "insert"
-L14[65] = v85 -- runtime: FN:function: ADDR
-L14[66] = L55 -- runtime: {new=FN:function: ADDR}
-L14[67] = v103 -- runtime: FN:function: ADDR
+L14[65] = v25 -- runtime: FN:function: ADDR
+L14[66] = v15 -- runtime: {new=FN:function: ADDR}
+L14[67] = v28 -- runtime: FN:function: ADDR
 L14[68] = "table"
 L14[69] = "lastlinedefined"
 L14[70] = "linedefined"
@@ -123,7 +139,7 @@ L14[84] = "function"
 L14[85] = "'setfenv' cannot change environment of given object"
 L14[86] = "slnaf"
 L14[87] = "getmetatable"
-L14[88] = v460 -- runtime: FN:function: ADDR
+L14[88] = v39 -- runtime: FN:function: ADDR
 L14[89] = "setmetatable"
 L14[90] = "tonumber"
 L14[91] = "select"
@@ -138,17 +154,17 @@ L14[99] = "next"
 L14[100] = "typeof"
 L14[101] = "getfenv"
 L14[102] = "setfenv"
-L14[103] = UDim.new -- static decode: v214
+L14[103] = UDim.new -- static decode: v38
 L14[104] = "abs"
 L14[105] = "wait"
 L14[106] = "delay"
-L14[107] = game -- static decode: v88
+L14[107] = game -- static decode: v26
 L14[108] = "copy"
-L14[109] = UDim2.new -- static decode: v629
-L14[110] = utf8 -- static decode: v529
-L14[111] = L67
+L14[109] = UDim2.new -- static decode: v44
+L14[110] = utf8 -- static decode: v41
+L14[111] = v20
 L14[112] = "챒욦떣귌ḯ핐"
-L14[113] = v468
+L14[113] = v40
 L14[114] = "앳띶쮕끍궷뇃쐤"
 L14[115] = "ScreenGui"
 L14[116] = "Frame"
@@ -183,7 +199,7 @@ L14[144] = "IsClient"
 L14[145] = "IsServer"
 L14[146] = "StarterPlayer"
 L14[147] = "GetChildren"
-L14[148] = Enum -- static decode: v658
+L14[148] = Enum -- static decode: v45
 L14[149] = "Enums"
 L14[150] = "EnumItem"
 L14[151] = "EnumType"
@@ -201,3213 +217,3147 @@ L14[162] = "NextInteger"
 L14[163] = "NextNumber"
 L14[164] = "Clone"
 L14[165] = "Shuffle"
-L14[166] = v176 -- runtime: FN:function: ADDR
-L14[167] = v623 -- runtime: FN:function: ADDR
-L14[168] = v164 -- runtime: FN:function: ADDR
-L14[169] = v666 -- runtime: FN:function: ADDR
+L14[166] = v36 -- runtime: FN:function: ADDR
+L14[167] = v43 -- runtime: FN:function: ADDR
+L14[168] = v35 -- runtime: FN:function: ADDR
+L14[169] = v46 -- runtime: FN:function: ADDR
 L14[170] = ":(%d+)[:\r\n]"
 L14[171] = "__index"
 L14[172] = "Your Lua environment does not support load or loadstring, therefore you are unable to use Luraph's 'LPH_NO_UPVALUES' macro."
 L14[173] = "dCWeI"
 L14[174] = "Luraph"
-L14[175] = v680
-L14[176] = v684
+L14[175] = v47
+L14[176] = v48
 L14[177] = ENV.bit32[0] -- loader-installed helper
-L14 = {}
-L15 = function(w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13, w14, w15, w16, w17, w18, w19, w20, w21, w22, w23, w24, w25, w26, w27, w28, w29, w30, a31, a32, w33, a34, a35, w36, w37, a38, w39, w40, a41, a42, a43, a44, w45, w46, a47, w48, a49, w50, w51, w52, a53, w54, w55, a56, a57, w58, a59, w60, w61, a62, w63, w64, w65, w66, a67, a68, a69, a70, w71, a72, a73, w74, w75, a76, w77, w78, w79, w80, a81, w82, w83, w84, w85, w86, a87, w88, a89, w90, a91, w92, w93, a94, w95, a96, w97, a98, a99, w100, w101, a102, a103, a104, a105, a106, w107, w108, a109, w110, w111, w112, a113, a114, a115, w116, a117, w118, a119, w120, w121, a122, a123, w124, w125, a126, a127, a128, a129, a130, a131, a132, a133, a134, a135, a136, a137, a138, a139, a140, a141, a142, a143, ...) -- F8
-    local w0, w146, w164, w186, w197, w199, w212, w223, w247, w260, w273, w282, w296, w309, w316, w324, w328, w330, w348, L349, L376, L394, L396, L410, w419, L420, L433, L440, L441, L442, L443, L444, L445, L446, L447, L448, w449, L450, w451, L452, L453, L454, L455, w456, w457, w458, L459, L460, L461, L462, L463, L464, L465, L466, w467, L468, w469, L470, w471, L472, L473, w474, L475, L476, L477, L478, L479, w480, L481, L482, L483, L484, L485, L486, L487, L488, L489, L490, L491, L492, L493, L494, L495, L496, L497, L498, L499, L500, L501, L502, w503, L504, L505, w506, L507, L508, L509, L510, w511, L512, L513, L514, L515, L516, L517, L518, L519, L520, L521, L522, L523, L524, L525, L526, L527, L528, L529, L530, L531, L532, L533, L534, L535, L536, L537, L538, L539, L540, L541, L542, L543, L544, L545, L546, L547, L548, L549, L550, L551, L552, L553, L554, L555, L556, L557, L558, L559, L560, L561, L562, L563, L564, L565, L566, L567, L568, L569, L570, L571, L572, L573, L574, L575, L576, L577, L578, L579, L580, L581, L582, L583, L584, L585, L586, L587, L588, L589, L590, L591, L592, L593, L594, L595, L596, L597, L598, L599, L600, L601, L602, L603, L604, L605, L606, L607, L608, L609, L610, L611, L612, L613, L614, L615, L616, L617, L618, L619, L620, L621, L622, L623, L624, L625, L626, L627, L628, L629, L630, L631, L632, L633, L634, L635, L636, L637, L638, L639, L640, L641, L642, L643, L644, L645, L646, L647, L648, L649, L650, L651, L652, L653, L654, L655, L656, L657, L658, L659, L660, L661, L662, L663, L664, L665, L666, L667, L668, L669, L670, L671, L672, L673, L674, L675, L676, L677, L678, L679, L680, L681, L682, L683, L684, L685, L686, L687, L688, L689, L690, L691, L692, L693, L694, L695, L696, L697, L698, L699, L700, L701, L702, L703, L704, L705, L706, L707, L708, L709, L710, L711, L712, L713, L714, L715, L716, L717, L718, L719, L720, L721, L722, L723, L724, L725, L726, L727, L728, L729, L730, L731, L732, L733, L734, L735, L736, L737, L738, L739, L740, L741, L742, L743, L744, L745, L746, L747, L748, L749, L750, L751, L752, L753, L754, L755, L756, L757, L758, L759, L760, L761, L762, L763, L764, L765, L766, L767, L768, L769, L770, L771, L772, L773, L774, L775, L776, L777, L778, L779, L780, L781, L782, L783, L784, L785, L786, L787, L788, L789, L790, L791, L792, L793, L794, L795, L796, L797, L798, L799, L800, L801, L802, L803, L804, L805, L806, L807, L808, L809, L810, L811, L812, L813, L814, L815, L816, L817, L818, L819, L820, L821, L822, L823, L824, L825, L826, L827, L828, L829, L830, L831, L832, L833, L834, L835, L836, L837, L838, L839, L840, L841, L842, L843, L844, L845, L846, L847, L848, L849, L850, L851, L852, L853, L854, L855
-    w2 = w1[1]
+L15 = function(w1, v2, w3, taskLib, stringLib, t4, w7, w8, t5, state, v6, w12, w13, w14, w15, w16, w17, w18, mathLib, t7, w21, v14, w23, v16, v17, k2, w27, k3, v19, v20, v21, v22, w33, k5, v23, w36, w37, v26, w39, w40, v29, v30, v31, v32, w45, w46, v35, w48, v37, w50, w51, w52, k6, w54, w55, v43, v44, w58, v46, w60, w61, v49, w63, w64, w65, w66, v54, v55, v56, v57, w71, v59, v60, w74, w75, v62, w77, w78, w79, w80, v66, w82, w83, w84, w85, w86, v71, w88, v73, w90, v75, w92, w93, fn1, w95, v78, w97, v80, v81, w100, w101, fn2, fn3, fn4, v82, v83, w107, w108, v86, w110, w111, w112, v89, fn6, v90, w116, v91, w118, v92, w120, w121, v94, v95, w124, w125, b2, b3, b4, v97, b5, v98, v99, v100, b6, v101, v102, fn10, v103, v104, v105, v106, v107, a143, ...) -- F8
+    local v1, v108, v109, v110, v111, v112, v113, v114, v115, v116, v117, v118, v119, v120, v121, v122, v123, v124, v125, v126, v127, v128, v129, v130, v131, v132, v133, fn11, v134, v135, v136, v137, v138, v139, v140, v141, v142, v143, v144, v145, v146, v147, v148, v149, v150, v151, v152, v153, v154, v155, v156, v157, v158, b7, v159, v160, v161, v162, v163, v164, v165, v166, v167, v168, v169, v170, v171, v172, v173, v174, v175, v176, v177, v178, v179, v180, v181, v182, v183, v184, v185, v186, v187, v188, v189, v190, v191, v192, v193, v194, v195, v196, v197, v198, v199, v200, v201, v202, v203, v204, v205, v206, v207, v208, v209, v210, v211, v212, v213, v214, v215, v216, v217, v218, v219, v220, v221, v222, v223, v224, v225, v226, v227, v228, v229, v230, v231, v232, v233, v234, v235, v236, v237, v238, v239, v240, v241, v242, v243, v244, v245, v246, v247, v248, v249, v250, v251, v252, v253, v254, v255, v256, v257, v258, v259, v260, v261, v262, v263, v264, v265, v266, v267, v268, v269, v270, v271, v272, v273, v274, v275, v276, v277, v278, v279, v280, v281, v282, v283, v284, v285, v286, v287, v288, v289, v290, v291, v292, v293, v294, v295, v296, v297, v298, v299, v300, v301, v302, v303, v304, v305, v306, v307, v308, v309, v310, v311, v312, v313, v314, v315, v316, v317, v318, v319, v320, v321, v322, v323, v324, v325, v326, v327, v328, v329, v330, v331, v332, v333, v334, v335, v336, v337, v338, v339, v340, v341, v342, v343, v344, v345, v346, v347, v348, v349, v350, v351, v352, v353, v354, v355, v356, v357, v358, v359, v360, v361, v362, v363, v364, v365, v366, v367, v368, v369, v370, v371, v372, v373, v374, v375, v376, v377, v378, v379, v380, v381, v382, v383, v384, v385, v386, v387, v388, v389, v390, v391, v392, v393, v394, v395, v396, v397, v398, v399, v400, v401, v402, v403, v404, v405, v406, v407, v408, v409, v410, v411, v412, v413, v414, v415, v416, v417, v418, v419, v420, v421, v422, v423, v424, v425, v426, v427, v428, v429, v430, v431, v432, v433, v434, v435, v436, v437, v438, v439, v440, v441, v442, v443, v444, v445, v446, v447, v448, v449, v450, v451, v452, v453, v454, v455, v456, v457, v458, v459, v460, v461, v462, v463, v464, v465, v466, v467, v468, v469, v470, v471, v472, v473, v474, v475, v476, v477, v478, v479, v480, v481, v482, v483, v484, v485, v486, v487, v488, v489, v490, v491, v492, v493, v494, v495, v496, v497, v498, v499, v500, v501, v502, v503, v504, v505, v506, v507, v508, v509, v510, v511, v512, v513, v514, v515, v516, v517, v518, v519, v520, v521, v522, v523, v524, v525, v526, v527, v528, v529, v530, v531, v532, v533, v534, v535, v536, v537, v538, v539, v540, v541, v542, v543, v544, v545, v546, v547
+    v2 = w1[1]
     w3 = w1[2]
-    w4 = task
-    w5 = string
-    w6 = w1[5]
+    taskLib = task
+    stringLib = string
+    t4 = w1[5]
     w7 = w1[5]
     w8 = w1[5]
-    w9 = w1[5]
-    w10 = 102
-    w9 = table
-    w11 = "format"
-    w11 = w5[w11]
+    t5 = w1[5]
+    state = 102
+    t5 = table
+    v6 = "format"
+    v6 = stringLib[v6]
     w12 = w1[5]
     w13 = w1[5]
     w14 = w1[5]
     w15 = w1[5]
     w16 = nil
-    w10 = 49
+    state = 49
     w17 = "char"
-    w16 = w5[w17]
+    w16 = stringLib[w17]
     w17 = "byte"
-    w17 = w5[w17]
+    w17 = stringLib[w17]
     w18 = "gsub"
-    w18 = w5[w18]
-    w19 = math
-    w20 = w1[5]
+    w18 = stringLib[w18]
+    mathLib = math
+    t7 = w1[5]
     w21 = w1[5]
-    w22 = w1[5]
+    v14 = w1[5]
     w23 = w1[5]
-    w24 = w1[5]
-    w25 = w1[5]
-    w10 = 102
-    w26 = "sub"
-    w21 = w5[w26]
-    w10 = 8
-    w86 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, ...) -- F14
-        local L226, L233, L234
-        a4 = nil
-        a5 = w1[5]
-        a6 = nil
-        a7 = 87
-        a9 = w58
-        a6 = 1
-        a4 = (a4 == a6)
-        if (not a4) then
-            a10 = 65
-            a11 = 354
-            a12 = 96
+    v16 = w1[5]
+    v17 = w1[5]
+    state = 102
+    k2 = "sub"
+    w21 = stringLib[k2]
+    state = 8
+    w86 = function(k1, v1, v2, v3, v4, v5, n1, v6, v7, v8, i1, i2, n2, n3, a15, a16, ...) -- F14
+        local v9, v10, v11
+        v4 = w1[5]
+        n1 = 87
+        v7 = w58
+        v3 = (v3 == v5)
+        if (not v3) then
+            i1 = 354
+            i2 = 96
         else
-            a10 = 18
             while true do
-                a4 = a1
-                a10 = 73
+                v3 = k1
             end
         end
-        w58 = a4
-        a6 = w66
-        a11 = a4
-        a12 = a6
-        a13 = a9
-        a14 = a10
-        a11(a12, a13, a14, a15)
-        a4 = w58
-        a11 = 18
-        a12 = 119
-        a13 = 93
+        w58 = v3
+        v5 = w66
+        i1 = v3
+        i2 = v5
+        n2 = v7
+        n3 = v8
+        i1(i2, n2, n3, a15)
+        v3 = w58
+        i1 = 18
+        i2 = 119
+        n2 = 93
         repeat
-        until not ((a7 > 12))
-        a8 = a5
-        a9 = a4
-        a10 = a6
-        a8 = a8(a9, a10)
-        a5 = a8
-        a7 = 123
-        a5 = a4
-        a10 = w1[5]
-        a8 = 84
-            -- (constant test eliminated: if not ((38 >= a8)) then)
-            a4 = w61
-            a8 = 35
-        a5 = w80
-        a7 = 33
-        a8 = 106
-        a5 = 0
-        a8 = 65
-        a6 = 2
-        a7 = 30
-        a6 = 1
-        a4 = (a4 + a6)
+        until not ((n1 > 12))
+        v6 = v4
+        v7 = v3
+        v8 = v5
+        v6 = v6(v7, v8)
+        v4 = v6
+        n1 = 123
+        v4 = v3
+        v8 = w1[5]
+            -- (constant test eliminated: if not ((38 >= v6)) then)
+            v3 = w61
+        v4 = w80
+        n1 = 33
+        v4 = 0
+        n1 = 30
+        v3 = (v3 + v5)
         while true do
-            a7 = 74
-            a4 = a1
+            n1 = 74
+            v3 = k1
         end
         do -- (terminates control flow)
             do return  end
         end
-        a6 = a2
-        a7 = 12
-        while not ((18 >= a14)) do -- while-exit-cond
+        v5 = v1
+        n1 = 12
+        while not ((18 >= n3)) do -- while-exit-cond
         end
-        a5 = a3
-        a4 = a3
-        a5 = w55
-        a8 = a5
-        a8()
+        v4 = v2
+        v3 = v2
+        v4 = w55
+        v6 = v4
+        v6()
     end
-    w10 = 78
-    if not ((60 >= w10)) then
-        if not ((w10 >= 79)) then
-            a87 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, ...) -- F67
-                local L212, L388
-                a4 = w1[5]
-                a5 = w1[5]
-                a6 = w1[5]
-                a7 = 38
-                a5 = a1
-                a6 = a2
-                a8 = a4
-                a9 = a5
-                a10 = a6
-                a8 = a8(a9, a10)
-                a4 = a8
-                a4 = (not a4)
-                a7 = 70
-                a8 = 117
-                a9 = 190
-                a10 = 73
+    state = 78
+    if not ((60 >= state)) then
+        if not ((state >= 79)) then
+            v71 = function(v1, v2, v3, b1, v4, n1, n2, v5, i1, i2, n3, fn1, n4, fn2, v6, v7, v8, a18, ...) -- F67
+                local v9, v10
+                b1 = w1[5]
+                v4 = w1[5]
+                n1 = w1[5]
+                n2 = 38
+                v4 = v1
+                n1 = v2
+                v5 = b1
+                i1 = v4
+                i2 = n1
+                v5 = v5(i1, i2)
+                b1 = v5
+                b1 = (not b1)
+                n2 = 70
+                i1 = 190
+                i2 = 73
                 repeat
-                until not ((a11 == 117))
-                a12 = a4
-                a12()
-                a5 = (a5 == a6)
-                if not ((not a5)) then
-                    a5 = a2
-                    a4 = a5
+                until not ((n3 == 117))
+                fn1 = b1
+                fn1()
+                v4 = (v4 == n1)
+                if not ((not v4)) then
+                    v4 = v2
+                    b1 = v4
                 end
-                a5 = w61
-                a8 = w1[5]
-                a9 = w1[5]
-                a10 = 11
-                a11 = 159
-                a12 = 8
-                a14(a15, a16, a17, a18)
-                a10 = 85
-                a10 = 79
-                a6 = 1
-                a5 = (a5 + a6)
-                a6 = 2
-                a4 = a5
-                a6 = w66
-                a5 = a3
-                    -- (constant test eliminated: if not ((a11 >= 214)) then)
-                    -- (constant test eliminated: if not ((27 >= a13)) then)
-                    a14 = a5
-                    a15 = a6
-                    a16 = a9
-                    a17 = a8
-                a9 = w58
+                v4 = w61
+                v5 = w1[5]
+                i1 = w1[5]
+                i2 = 11
+                n3 = 159
+                fn2(v6, v7, v8, a18)
+                i2 = 85
+                i2 = 79
+                n1 = 1
+                v4 = (v4 + n1)
+                n1 = 2
+                b1 = v4
+                n1 = w66
+                v4 = v3
+                    -- (constant test eliminated: if not ((n3 >= 214)) then)
+                if not ((n4 > 19)) then
+                    if not ((19 > n4)) then
+                            -- (constant test eliminated: if not ((i2 == 85)) then)
+                            w58 = v4
+                            -- (empty spin loop: dispatcher exit the structurer could not
+                            --  recover; commented out -- it can never terminate on its own)
+                            -- while true do
+                            -- end
+                    end
+                    v5 = b1
+                end
+                if not ((27 >= n4)) then
+                    fn2 = v4
+                    v6 = n1
+                    v7 = i1
+                    v8 = v5
+                end
+                i1 = w58
                 repeat
-                until not ((31 >= a8))
-                a8 = 114
-                a5 = a1
-                while true do -- (empty spin loop: unrestructured dispatcher exit)
-                end
-                a8 = 31
-                a7 = 109
-                a5 = (a5 == a6)
-                a8 = 66
-                a6 = 1
+                until not ((31 >= v5))
+                v4 = v1
+                -- (empty spin loop: dispatcher exit the structurer could not
+                --  recover; commented out -- it can never terminate on its own)
+                -- while true do
+                -- end
+                n2 = 109
+                v4 = (v4 == n1)
+                n1 = 1
                 do -- (terminates control flow)
                     do return  end
                 end
-                a8 = 86
-                a9 = 214
-                a10 = 64
-                a4 = 1
-                a8 = 57
-                a5 = a3
-                a4 = a3
-                a10 = 48
-                a5 = w58
-                a7 = 77
-                a4 = w82
+                i1 = 214
+                i2 = 64
+                b1 = 1
+                v4 = v3
+                b1 = v3
+                i2 = 48
+                v4 = w58
+                n2 = 77
+                b1 = w82
             end
-            w10 = 85
+            state = 85
             w125 = w83
-            a126 = w13
-            a127 = w120
-            a126 = a126(a127)
-            a127 = "userdata"
-            a128 = true
-            w125(a126, a127, a128, a129)
+            b2 = w13
+            b3 = w120
+            b2 = b2(b3)
+            b3 = "userdata"
+            b4 = true
+            w125(b2, b3, b4, v97)
         end
     end
-    if not ((85 >= w10)) then
-        a102 = w97
-        a103 = w52
-        a104 = "typeof"
-        a102(a103, a104)
-        a102 = "new"
-        a102 = a69[a102]
-        a103 = w97
-        a104 = w7
-        a105 = "gmatch"
-        a103(a104, a105)
-        a103 = w97
-        a104 = w11
-        a105 = "format"
-        a103(a104, a105)
-        w10 = 115
-        if (w10 > 54) then
+    if not ((85 >= state)) then
+        fn2 = w97
+        fn3 = w52
+        fn4 = "typeof"
+        fn2(fn3, fn4)
+        fn2 = "new"
+        fn2 = v56[fn2]
+        fn3 = w97
+        fn4 = w7
+        v82 = "gmatch"
+        fn3(fn4, v82)
+        fn3 = w97
+        fn4 = v6
+        v82 = "format"
+        fn3(fn4, v82)
+        state = 115
+        if (state > 54) then
         else
-            a103 = w97
-            a104 = w14
-            a105 = "find"
-            a103(a104, a105)
-            w10 = 29
+            fn3 = w97
+            fn4 = w14
+            v82 = "find"
+            fn3(fn4, v82)
+            state = 29
         end
         w120[3699368772] = 452242525
         w120[1831891793] = 1560434486
-        w118(a119, w120)
+        w118(v92, w120)
         w118 = w1[5]
-        w10 = 82
-        if (w10 ~= 84) then
-            if (w10 ~= 82) then
-                a119 = w118
-                w120 = a113
+        state = 82
+        if (state ~= 84) then
+            if (state ~= 82) then
+                v92 = w118
+                w120 = v89
                 w121 = "DataModel"
-                a119(w120, w121)
-                w10 = 84
-                w121 = a119[60]
+                v92(w120, w121)
+                state = 84
+                w121 = v92[60]
                 w101[28] = w97
                 w121 = w83
-                a122 = L7
-                a122 = a122()
-                a123 = a119[60]
+                v94 = L7
+                v94 = v94()
+                v95 = v92[60]
                 w124 = 1
-                w121(a122, a123, w124, w125)
+                w121(v94, v95, w124, w125)
                 w121 = 90
-                a122 = 153
-                a123 = 33
+                v94 = 153
+                v95 = 33
             else
-                w118 = function(p1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, p17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, a31, ...) -- F126
-                    local L0, L190
-                    a3 = w83
-                    a4 = "userdata"
-                    a5 = w13
-                    a6 = p1
-                    a5 = a5(a6)
-                    a3(a4, a5)
-                    a3 = w84
-                    a4 = w52
-                    a5 = p1
-                    a4 = a4(a5)
-                    a5 = "Instance"
-                    a3(a4, a5)
-                    a3 = w1[5]
-                    a4 = w1[5]
-                    a5 = 61
-                    a3 = p1[0]
-                    a6 = "Parent"
-                    a4 = p1[a6]
-                    a5 = 120
-                    a10 = 92
-                        -- (constant test eliminated: if not ((11 >= a10)) then)
-                            -- (constant test eliminated: if not ((a10 >= 110)) then)
-                            a10 = 11
-                            a7 = "AncestryChanged"
-                    a9 = p1[a7]
-                    a10 = 117
+                w118 = function(t1, v2, fn1, v3, v4, fn2, v5, v6, n1, fn3, fn4, v7, i1, i2, i3, n2, c17, v8, v9, i4, i5, n3, fn6, v10, i6, i7, n4, fn7, v11, v12, a31, ...) -- F126
+                    local v1, v13
+                    fn1 = w83
+                    v3 = "userdata"
+                    v4 = w13
+                    fn2 = t1
+                    v4 = v4(fn2)
+                    fn1(v3, v4)
+                    fn1 = w84
+                    v3 = w52
+                    v4 = t1
+                    v3 = v3(v4)
+                    v4 = "Instance"
+                    fn1(v3, v4)
+                    fn1 = w1[5]
+                    v3 = w1[5]
+                    v4 = 61
+                    fn1 = t1[0]
+                    fn2 = "Parent"
+                    v3 = t1[fn2]
+                    v4 = 120
+                    fn3 = 92
+                        -- (constant test eliminated: if not ((11 >= fn3)) then)
+                            -- (constant test eliminated: if not ((fn3 >= 110)) then)
+                            fn3 = 11
+                            v5 = "AncestryChanged"
+                    n1 = t1[v5]
+                    fn3 = 117
                     while true do
-                        a7 = p1[a10]
-                        a9 = 78
+                        v5 = t1[fn3]
+                        n1 = 78
                     end
-                    a3 = 31
-                    a4 = 119
-                    a5 = 44
-                    a10 = "Name"
-                    a7 = w83
-                    a8 = a2
-                    a9 = "ClassName"
-                    a9 = p1[a9]
-                    a7(a8, a9)
-                    if not ((a10 >= 92)) then
-                        a10 = 110
-                        a8 = p1[a7]
+                    v4 = 44
+                    fn3 = "Name"
+                    v5 = w83
+                    v6 = v2
+                    n1 = "ClassName"
+                    n1 = t1[n1]
+                    v5(v6, n1)
+                    if not ((fn3 >= 92)) then
+                        fn3 = 110
+                        v6 = t1[v5]
                     end
-                    if (110 >= a10) then
+                    if (110 >= fn3) then
                     else
-                        a11 = w86
-                        a12 = a8
-                        a13 = a9
-                        a11(a12, a13)
-                        a11 = w78
-                        a12 = (a8 == a9)
-                        a11(a12)
-                        a11 = "Connect"
+                        fn4 = w86
+                        v7 = v6
+                        i1 = n1
+                        fn4(v7, i1)
+                        fn4 = w78
+                        v7 = (v6 == n1)
+                        fn4(v7)
+                        fn4 = "Connect"
                     end
-                    a10 = w83
-                    a11 = (#a7)
-                    a12 = (#a8)
-                    a10(a11, a12)
-                    a10 = UPVALS[L0]
-                    a11 = w37
-                    a12 = p1
-                    a11 = a11(a12)
-                    a12 = a7
-                    a10(a11, a12)
-                    p17 = false
-                    a18 = "Destroying"
-                    a18 = p1[a18]
-                    a19 = a18; a18 = a18["Connect"]
-                    a20 = function(a1, a2, a3, a4, ...) -- F132
-                        local L436
-                        a1 = true
-                        p17 = a1
+                    fn3 = w83
+                    fn4 = (#v5)
+                    v7 = (#v6)
+                    fn3(fn4, v7)
+                    fn3 = UPVALS[v1]
+                    fn4 = w37
+                    v7 = t1
+                    fn4 = fn4(v7)
+                    v7 = v5
+                    fn3(fn4, v7)
+                    c17 = false
+                    v8 = "Destroying"
+                    v8 = t1[v8]
+                    v9 = v8; v8 = v8["Connect"]
+                    i4 = function(v1, a2, a3, a4, ...) -- F132
+                        local v2
+                        v1 = true
+                        c17 = v1
                         do return  end
                     end
-                    a18 = a18(a19, a20)
-                    a19 = 60
-                    a20 = 204
-                    a21 = 72
-                    if not ((a9 ~= 85)) then
-                        a10 = w83
-                        a11 = "string"
-                        a12 = w13
-                        a13 = a7
-                        a12 = a12(a13)
-                        a10(a11, a12)
-                        a10 = w84
-                        a11 = a7
-                        a12 = a8
-                        a10(a11, a12)
+                    v8 = v8(v9, i4)
+                    i4 = 204
+                    i5 = 72
+                    if not ((n1 ~= 85)) then
+                        fn3 = w83
+                        fn4 = "string"
+                        v7 = w13
+                        i1 = v5
+                        v7 = v7(i1)
+                        fn3(fn4, v7)
+                        fn3 = w84
+                        fn4 = v5
+                        v7 = v6
+                        fn3(fn4, v7)
                     end
-                    a10 = "Name"
-                    a8 = p1[a10]
-                    a9 = 85
-                    p17 = w97
-                    a18 = a12
-                    a19 = "Connect"
-                    p17(a18, a19)
-                    p17 = w86
-                    a18 = a11
-                    a19 = a12
-                    p17(a18, a19)
-                    if not ((a22 > 60)) then
-                        a23 = w79
-                        a24 = p17
-                        a23(a24)
-                    end
-                    a23 = w1[5]
-                    a24 = 19
-                    a25 = 238
-                    a26 = 73
-                    a28 = w112
-                    a29 = a23
-                    a30 = w1[5]
-                    a28(a29, a30)
+                    fn3 = "Name"
+                    v6 = t1[fn3]
+                    n1 = 85
+                    c17 = w97
+                    v8 = v7
+                    v9 = "Connect"
+                    c17(v8, v9)
+                    c17 = w86
+                    v8 = fn4
+                    v9 = v7
+                    c17(v8, v9)
+                    fn6 = w1[5]
+                    i6 = 238
+                    i7 = 73
+                    fn7 = w112
+                    v11 = fn6
+                    v12 = w1[5]
+                    fn7(v11, v12)
                     repeat
-                    until not ((a6 ~= 31))
-                    a7 = w1[5]
-                    a8 = w1[5]
-                    a9 = 107
-                    a7 = w1[5]
-                    a8 = w1[5]
-                    a9 = w1[5]
-                    p17 = w97
-                    a18 = a11
-                    a19 = "Connect"
-                    p17(a18, a19)
-                    a24 = w78
-                    a25 = "Connected"
-                    a25 = a18[a25]
-                    a25 = (not a25)
-                    a24(a25)
-                    if not ((a6 ~= 75)) then
+                    until not ((fn2 ~= 31))
+                    v5 = w1[5]
+                    v6 = w1[5]
+                    n1 = 107
+                    v5 = w1[5]
+                    v6 = w1[5]
+                    n1 = w1[5]
+                    c17 = w97
+                    v8 = fn4
+                    v9 = "Connect"
+                    c17(v8, v9)
+                    v10 = w78
+                    i6 = "Connected"
+                    i6 = v8[i6]
+                    i6 = (not i6)
+                    v10(i6)
+                    if not ((fn2 ~= 75)) then
                     end
-                    a28(a29, a30)
-                    a7 = w83
-                    a8 = "The metatable is locked"
-                    a9 = w48
-                    a10 = p1
-                    a7(a8, a9(a10, a11))
+                    fn7(v11, v12)
+                    v5 = w83
+                    v6 = "The metatable is locked"
+                    n1 = w48
+                    fn3 = t1
+                    v5(v6, n1(fn3, fn4))
                     do -- (terminates control flow)
                         do return  end
                     end
-                    if (a27 ~= 19) then
-                        a28 = w97
-                        a29 = a23
-                        a30 = "Disconnect"
+                    if (n4 ~= 19) then
+                        fn7 = w97
+                        v11 = fn6
+                        v12 = "Disconnect"
                     else
-                        a28 = "Disconnect"
-                        a23 = a18[a28]
+                        fn7 = "Disconnect"
+                        fn6 = v8[fn7]
                     end
-                    a11 = a8[a11]
-                    a12 = "Connect"
-                    a12 = a8[a12]
-                    a13 = 118
-                    a14 = 264
-                    a15 = 10
-                    a23 = w78
-                    a24 = "Connected"
-                    a24 = a18[a24]
-                    a23(a24)
-                    a28 = a23
-                    a29 = a18
-                    a28(a29)
+                    fn4 = v6[fn4]
+                    v7 = "Connect"
+                    v7 = v6[v7]
+                    i1 = 118
+                    i2 = 264
+                    i3 = 10
+                    fn6 = w78
+                    v10 = "Connected"
+                    v10 = v8[v10]
+                    fn6(v10)
+                    fn7 = fn6
+                    v11 = v8
+                    fn7(v11)
                 end
-                w10 = 9
-                w125 = a119[59]
-                w101[72] = w348
+                state = 9
+                w125 = v92[59]
+                w101[72] = v125
             end
         else
-            a119 = w118
-            w120 = a106
+            v92 = w118
+            w120 = v83
             w121 = "Workspace"
-            a119(w120, w121)
-            a119 = w83
-            w120 = a113
+            v92(w120, w121)
+            v92 = w83
+            w120 = v89
             w121 = "Parent"
-            w121 = a106[w121]
-            a122 = true
-            a119(w120, w121, a122, a123)
-            a119 = nil
+            w121 = v83[w121]
+            v94 = true
+            v92(w120, w121, v94, v95)
+            v92 = nil
             w120 = 104
             w121 = 330
-            a122 = 113
+            v94 = 113
         end
-        a104(a105, a106)
-        a104 = w97
-        a105 = w26
-        a106 = "rep"
-        a104(a105, a106)
-        w10 = 93
-            -- (constant test eliminated: if not ((23 >= w10)) then)
-        a104 = w97
-        a105 = a72
-        a106 = "insert"
-        a104(a105, a106)
-        w10 = 10
-        a131[4286544108] = w330
-        a131[4113771706] = L477
-        a131[4054428537] = L645
-        a131[1373830112] = w199
-        a131[1485835597] = L543
-        a131[3571856872] = w146
-        a126 = a131
+        fn4(v82, v83)
+        fn4 = w97
+        v82 = k2
+        v83 = "rep"
+        fn4(v82, v83)
+        state = 93
+            -- (constant test eliminated: if not ((23 >= state)) then)
+        fn4 = w97
+        v82 = v59
+        v83 = "insert"
+        fn4(v82, v83)
+        state = 10
+        v98[4286544108] = v124
+        v98[4113771706] = v169
+        v98[4054428537] = v337
+        v98[1373830112] = v112
+        v98[1485835597] = v235
+        v98[3571856872] = v108
+        b2 = v98
     end
     w85 = w1[67]
-    w10 = 107
-    a126 = true
-    a123(w124, w125, a126, a127)
-        -- (constant test eliminated: if (a122 ~= 20) then)
-    a99 = w1[88]
-    w10 = 58
+    state = 107
+    b2 = true
+    v95(w124, w125, b2, b3)
+        -- (constant test eliminated: if (v94 ~= 20) then)
+    v81 = w1[88]
+    state = 58
     w100 = w97
     w101 = w36
-    a102 = "setmetatable"
-    w100(w101, a102)
+    fn2 = "setmetatable"
+    w100(w101, fn2)
     w100 = w97
-    w101 = a70
-    a102 = "tonumber"
-    w100(w101, a102)
+    w101 = v57
+    fn2 = "tonumber"
+    w100(w101, fn2)
     w100 = w1[5]
-    w10 = 12
-    w125 = a119[22]
+    state = 12
+    w125 = v92[22]
     w101[77] = w23
     if not ((not w121)) then
-        a126 = w55
-        a126()
+        b2 = w55
+        b2()
     end
-    a126 = w55
-    a126()
-    a126 = w1[5]
-    a127 = w1[5]
-    a128 = w1[5]
-    a129 = 87
-    a130 = 163
-    a131 = 19
-    a127 = w97
-    a128 = "Shuffle"
-    a128 = w121[a128]
-    a129 = "Shuffle"
-    a127(a128, a129)
+    b2 = w55
+    b2()
+    b2 = w1[5]
+    b3 = w1[5]
+    b4 = w1[5]
+    v97 = 87
+    b5 = 163
+    v98 = 19
+    b3 = w97
+    b4 = "Shuffle"
+    b4 = w121[b4]
+    v97 = "Shuffle"
+    b3(b4, v97)
     w118 = w97
-    a119 = a102
+    v92 = fn2
     w120 = "new"
-    w118(a119, w120)
+    w118(v92, w120)
     w118 = w97
-    a119 = a98
+    v92 = v80
     w120 = "new"
-    w118(a119, w120)
-    w10 = 14
-    w121 = a119[29]
+    w118(v92, w120)
+    state = 14
+    w121 = v92[29]
     w101[43] = w121
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[29]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[29]
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w120 = 115
     w120 = 54
-    w121 = a119[12]
+    w121 = v92[12]
     w101[44] = w13
     w121 = w84
-    a122 = L7
-    a122 = a122()
-    a123 = a119[12]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[12]
     w124 = 1
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w120 = w84
     w121 = w52
-    a122 = a119
-    w121 = w121(a122)
-    a122 = "Enums"
-    a123 = true
-    w120(w121, a122, a123, w124)
-    w121 = a119[a119]
-    w101[51] = a98
+    v94 = v92
+    w121 = w121(v94)
+    v94 = "Enums"
+    v95 = true
+    w120(w121, v94, v95, w124)
+    w121 = v92[v92]
+    w101[51] = v80
     w121 = w84
-    a122 = a119[5]
-    a123 = L7
-    a123 = a123()
+    v94 = v92[5]
+    v95 = L7
+    v95 = v95()
     w124 = 1
-    w121(a122, a123, w124, w125)
-    w121 = a119[20]
-    w101[52] = a128
+    w121(v94, v95, w124, w125)
+    w121 = v92[20]
+    w101[52] = b4
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[20]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[20]
     w124 = 1
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w120 = 117
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[23]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[23]
     w124 = 1
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w120 = 111
     w125 = w84
-    a126 = w52
-    a127 = w120
-    a126 = a126(a127)
-    a127 = "EnumItem"
-    a128 = true
-    w125(a126, a127, a128, a129)
-    a139 = true
-    a137(a138, a139)
-    a133 = w1[w1]
-    a133 = a132[a133]
-    a133 = (a133 * 100)
-    a133 = (a133 // 1)
+    b2 = w52
+    b3 = w120
+    b2 = b2(b3)
+    b3 = "EnumItem"
+    b4 = true
+    w125(b2, b3, b4, v97)
+    v104 = true
+    fn10(v103, v104)
+    v100 = w1[w1]
+    v100 = v99[v100]
+    v100 = (v100 * 100)
+    v100 = (v100 // 1)
     w101[98] = w36
-    a122 = 46
-    if (46 >= a122) then
-        a133 = a119
-        a134 = "Y"
-        a134 = a132[a134]
-        a135 = true
-        a133(a134, a135)
-        a122 = 53
-        w125 = a119[7]
+    v94 = 46
+    if (46 >= v94) then
+        v100 = v92
+        b6 = "Y"
+        b6 = v99[b6]
+        v101 = true
+        v100(b6, v101)
+        v94 = 53
+        w125 = v92[7]
         w101[37] = w74
     else
-        a134 = w120; a133 = w120["Destroy"]
-        a133(a134)
-        w10 = 66
+        b6 = w120; v100 = w120["Destroy"]
+        v100(b6)
+        state = 66
     end
-    a49 = w1[w1]
-    w46 = w20[a49]
-    a47 = w4[0]
-    w10 = 51
-        -- (constant test eliminated: if not ((25 >= w10)) then)
+    v37 = w1[w1]
+    w46 = t7[v37]
+    v35 = taskLib[0]
+    state = 51
+        -- (constant test eliminated: if not ((25 >= state)) then)
     w45 = w1[42]
-    w10 = 36
+    state = 36
     w125 = w84
-    a126 = w13
-    a127 = a123
-    a126 = a126(a127)
-    a127 = "userdata"
-    a128 = true
-    w125(a126, a127, a128, a129)
+    b2 = w13
+    b3 = v95
+    b2 = b2(b3)
+    b3 = "userdata"
+    b4 = true
+    w125(b2, b3, b4, v97)
     w124 = 11
-    a128 = 263
-    w124 = w124(w125, a126, a127, a128)
-    w121[a123] = w124
-    a123 = w1[5]
+    b4 = 263
+    w124 = w124(w125, b2, b3, b4)
+    w121[v95] = w124
+    v95 = w1[5]
     w124 = 40
     w125 = 386
-    a126 = 114
-    w125 = a119[4]
-    w101[36] = L605
+    b2 = 114
+    w125 = v92[4]
+    w101[36] = v297
     w125 = w83
-    a126 = L7
-    a126 = a126()
-    a127 = a119[4]
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    a123 = w84
+    b2 = L7
+    b2 = b2()
+    b3 = v92[4]
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    v95 = w84
     w124 = "userdata"
     w125 = w13
-    a126 = w121
-    w125 = w125(a126)
-    a126 = w1[w1]
-    a123(w124, w125, a126, a127)
-    a122 = 46
-        -- (constant test eliminated: if (72 >= w10) then)
-            -- (constant test eliminated: if not ((w10 >= 77)) then)
-            if not ((58 >= w10)) then
+    b2 = w121
+    w125 = w125(b2)
+    b2 = w1[w1]
+    v95(w124, w125, b2, b3)
+    v94 = 46
+        -- (constant test eliminated: if (72 >= state) then)
+            -- (constant test eliminated: if not ((state >= 77)) then)
+            if not ((58 >= state)) then
                 w112 = w1[5]
-                a113 = w1[w1]
-                a114 = 36
-                a115 = 244
+                v89 = w1[w1]
+                fn6 = 36
+                v90 = 244
                 w116 = 76
                 w77 = w1[5]
                 w78 = w1[5]
                 w79 = w1[5]
-                w10 = 101
+                state = 101
             end
     w121 = w84
-    a122 = a119[25]
-    a123 = L7
-    a123 = a123()
+    v94 = v92[25]
+    v95 = L7
+    v95 = v95()
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w121 = 50
-    a122 = 89
-    a123 = 39
-    a114(a115)
-    a114 = w112
-    a115 = a68
-    a114(a115)
-    a114 = w112
-    a115 = w2
-    a114(a115)
-    w10 = 58
-    a114 = w112
-    a115 = w7
-    a114(a115)
-    w10 = 117
-    a114 = w112
-    a115 = w14
-    a114(a115)
-    a114 = w1[5]
-    a115 = w1[w1]
-    w10 = 89
-    if (100 >= w10) then
+    v94 = 89
+    v95 = 39
+    fn6(v90)
+    fn6 = w112
+    v90 = v55
+    fn6(v90)
+    fn6 = w112
+    v90 = v2
+    fn6(v90)
+    state = 58
+    fn6 = w112
+    v90 = w7
+    fn6(v90)
+    state = 117
+    fn6 = w112
+    v90 = w14
+    fn6(v90)
+    fn6 = w1[5]
+    v90 = w1[w1]
+    state = 89
+    if (100 >= state) then
     else
-        a115 = w1[5]
-        w10 = 67
+        v90 = w1[5]
+        state = 67
     end
-    w26 = "isyieldable"
-    w22 = w6[w26]
-    w10 = 71
-    w101[93] = L410
-    a131 = w1[5]
-    a122 = 119
+    k2 = "isyieldable"
+    v14 = t4[k2]
+    state = 71
+    w101[93] = v130
+    v98 = w1[5]
+    v94 = 119
     while true do
-        a122 = 106
-        a132 = a119
-        a133 = "X"
-        a133 = a130[a133]
-        a134 = "Scale"
-        a133 = a133[a134]
-        a134 = true
-        a132(a133, a134)
+        v94 = 106
+        v99 = v92
+        v100 = "X"
+        v100 = b5[v100]
+        b6 = "Scale"
+        v100 = v100[b6]
+        b6 = true
+        v99(v100, b6)
     end
-    a123 = w84
+    v95 = w84
     w124 = 0.36546066092082763
-    a126 = w121; w125 = w121["NextNumber"]
-    w125 = w125(a126)
-    a126 = true
-    a123(w124, w125, a126, a127)
-    a123 = w84
+    b2 = w121; w125 = w121["NextNumber"]
+    w125 = w125(b2)
+    b2 = true
+    v95(w124, w125, b2, b3)
+    v95 = w84
     w125 = w121; w124 = w121["NextNumber"]
     w124 = w124(w125)
     w125 = 0.9399625980565814
-    a126 = true
-    a123(w124, w125, a126, a127)
-    a123 = 42
+    b2 = true
+    v95(w124, w125, b2, b3)
+    v95 = 42
     w124 = 60
     w125 = 4
-    a119 = w79
+    v92 = w79
     w120 = w45
     w121 = "GetChildren"
-    w121 = a113[w121]
+    w121 = v89[w121]
     w120 = w120(w121)
     w121 = true
-    a119(w120, w121)
-    a119 = w1[5]
+    v92(w120, w121)
+    v92 = w1[5]
     w120 = 50
     w121 = 228
-    a122 = 104
-    a129 = 22
+    v94 = 104
+    v97 = 22
     while true do
         w121 = w118[8]
-        w101[18] = a43
+        w101[18] = v31
     end
     w120 = 122
-    a126 = a126()
-    a127 = a119[24]
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    a114 = w112
-    a115 = w11
-    a114(a115)
-    w10 = 80
-        -- (constant test eliminated: if not ((30 >= w10)) then)
-        a102 = {}
-        w101 = a102
-        w10 = 0
-    a102 = w97
-    a103 = w13
-    a104 = "type"
-    a102(a103, a104)
-    a102 = w97
-    a103 = w40
-    a104 = "next"
-    a102(a103, a104)
-    w10 = 119
+    b2 = b2()
+    b3 = v92[24]
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    fn6 = w112
+    v90 = v6
+    fn6(v90)
+    state = 80
+        -- (constant test eliminated: if not ((30 >= state)) then)
+        fn2 = {}
+        w101 = fn2
+        state = 0
+    fn2 = w97
+    fn3 = w13
+    fn4 = "type"
+    fn2(fn3, fn4)
+    fn2 = w97
+    fn3 = w40
+    fn4 = "next"
+    fn2(fn3, fn4)
+    state = 119
     w125 = "Name"
     w121[w125] = w124
     w125 = w83
-    a126 = w121
-    a127 = a123
-    a128 = w120
-    a129 = w124
-    a127 = a127(a128, a129)
-    a128 = true
-    w125(a126, a127, a128, a129)
-    a126 = w120; w125 = w120["Destroy"]
-    w125(a126)
-    a126 = w121; w125 = w121["Destroy"]
-    w125(a126)
+    b2 = w121
+    b3 = v95
+    b4 = w120
+    v97 = w124
+    b3 = b3(b4, v97)
+    b4 = true
+    w125(b2, b3, b4, v97)
+    b2 = w120; w125 = w120["Destroy"]
+    w125(b2)
+    b2 = w121; w125 = w121["Destroy"]
+    w125(b2)
     w125 = w79
-    a126 = "Parent"
-    a126 = w121[a126]
-    a127 = true
-    w125(a126, a127)
+    b2 = "Parent"
+    b2 = w121[b2]
+    b3 = true
+    w125(b2, b3)
     w125 = w78
-    a126 = w45
-    a127 = function(a1, a2, a3, a4, ...) -- F44
-        a1 = w120
-        w121["Parent"] = a1
+    b2 = w45
+    b3 = function(v1, a2, a3, a4, ...) -- F44
+        v1 = w120
+        w121["Parent"] = v1
         do return  end
     end
-    a126 = a126(a127)
-    a126 = (not a126)
-    a127 = true
-    w125(a126, a127)
-    a119 = w1[5]
+    b2 = b2(b3)
+    b2 = (not b2)
+    b3 = true
+    w125(b2, b3)
+    v92 = w1[5]
     w120 = 32
     w121 = 137
-    a122 = 105
-    w112 = function(s1, a2, s3, s4, s5, a6, a7, a8, a9, ...) -- F258
-        local L188
-        s3 = w33
-        s4 = s1
-        s3 = s3(s4)
-        if not ((not s3)) then
-            s3 = function(a1, a2, a3, a4, a5, a6, ...) -- F264
-                local L131
-                a2 = w83
-                a3 = w111
+    v94 = 105
+    w112 = function(h1, a2, h3, fn2, v1, fn3, v2, v3, a9, ...) -- F258
+        local v4
+        h3 = w33
+        fn2 = h1
+        h3 = h3(fn2)
+        if not ((not h3)) then
+            h3 = function(a1, fn1, fn2, v1, v2, a6, ...) -- F264
+                local v3
+                fn1 = w83
+                fn2 = w111
                 do -- (terminates control flow)
-                    a5 = 3
-                    a2(a3, a4(a5, a6))
-                    a2 = UPVALS[a3]
-                    a3 = s1
-                    a4 = w111
-                    a5 = 4
-                    a2(a3, a4(a5, a6))
-                    a2 = w84
-                    a3 = w111
-                    a4 = 5
-                    a3 = a3(a4)
-                    a4 = w15
-                    a2(a3, a4)
-                    a2 = w84
-                    a3 = w111
-                    a4 = 7
-                    a3 = a3(a4)
-                    a4 = w45
-                    a2(a3, a4)
-                    a2 = w84
-                    a3 = w111
-                    a4 = 8
-                    a3 = a3(a4)
-                    a4 = w112
-                    a2(a3, a4)
-                    a2 = ...  -- vararg fill: also writes R3, R4, ... (count is runtime dependent)
+                    v2 = 3
+                    fn1(fn2, v1(v2, a6))
+                    fn1 = UPVALS[fn2]
+                    fn2 = h1
+                    v1 = w111
+                    v2 = 4
+                    fn1(fn2, v1(v2, a6))
+                    fn1 = w84
+                    fn2 = w111
+                    fn2 = fn2(v1)
+                    v1 = w15
+                    fn1(fn2, v1)
+                    fn1 = w84
+                    fn2 = w111
+                    fn2 = fn2(v1)
+                    v1 = w45
+                    fn1(fn2, v1)
+                    fn1 = w84
+                    fn2 = w111
+                    fn2 = fn2(v1)
+                    v1 = w112
+                    fn1(fn2, v1)
+                    fn1 = ...  -- vararg fill: also writes R3, R4, ... (count is runtime dependent)
                     do return ... end
                 end
                 while true do
-                    a3 = a3(a4)
-                    a4 = w45
-                    a2(a3, a4)
+                    fn2 = fn2(v1)
+                    v1 = w45
+                    fn1(fn2, v1)
                 end
-                a4 = 2
-                a2 = w84
-                a3 = s3
-                a4 = w111
+                fn1 = w84
+                fn2 = h3
+                v1 = w111
             end
-            s4 = w15
-            s5 = s1
-            a6 = s3
-            a7 = ...  -- vararg fill: also writes R8, R9, ... (count is runtime dependent)
-            s4, s5, a6 = s4()
-            a6 = w79
-            a7 = s4
-            a6(a7)
-            a6 = w86
-            a7 = s5
-            a8 = "error in error handling"
-            a6(a7, a8)
+            fn2 = w15
+            v1 = h1
+            fn3 = h3
+            v2 = ...  -- vararg fill: also writes R8, R9, ... (count is runtime dependent)
+            fn2, v1, fn3 = fn2()
+            fn3 = w79
+            v2 = fn2
+            fn3(v2)
+            fn3 = w86
+            v2 = v1
+            fn3(v2, v3)
         end
         do return  end
     end
-    w10 = 6
+    state = 6
     w125 = w118[3]
-    w101[6] = a73
+    w101[6] = v60
     w125 = w83
-    a126 = L7
-    a126 = a126()
-    a127 = w118[3]
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    a91 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, ...) -- F352
-        local L474
-        a3 = w1[5]
-        a4 = w1[5]
-        a5 = 18
-        a3 = w40
-        a5 = 73
-        a12 = a10
-        a13 = a11
-        a14 = a12
-        a13 = a13(a14)
-        a11 = a13
-        a13 = w1[5]
-        a14 = 30
-        a13 = a2
-        a14 = 101
-        a8 = nil
-        a5 = 68
-            -- (constant test eliminated: if not ((56 >= a5)) then)
-            a5 = 83
-            a9 = a6
-            a10 = a7
-            a11 = a8
+    b2 = L7
+    b2 = b2()
+    b3 = w118[3]
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    v75 = function(v1, v2, k1, v3, n1, v4, k2, v5, v6, v7, v8, i1, i2, i3, i4, fn1, a17, a18, ...) -- F352
+        local v9
+        k1 = w1[5]
+        v3 = w1[5]
+        n1 = 18
+        k1 = w40
+        n1 = 73
+        i1 = v7
+        i2 = v8
+        i3 = i1
+        i2 = i2(i3)
+        v8 = i2
+        i2 = w1[5]
+        i3 = 30
+        i2 = v2
+        i3 = 101
+        n1 = 68
+            -- (constant test eliminated: if not ((56 >= n1)) then)
+            n1 = 83
+            v6 = v4
+            v7 = k2
+            v8 = v5
             -- generic-for iterator (coroutine desugar) reg R9
             repeat
-            until not ((155 > a16))
-        a11 = nil
-        a12 = 82
-        a13 = 195
-        a14 = 62
+            until not ((155 > fn1))
+        i1 = 82
+        i2 = 195
+        i3 = 62
         repeat
-        until not ((82 >= a15))
-        a16 = a11
-        a16()
-        a9, a10, a11 = coroutine.resume(a9, a10, a11)
-        if a9 then
+        until not ((82 >= i4))
+        fn1 = v8
+        fn1()
+        v6, v7, v8 = coroutine.resume(v6, v7, v8)
+        if v6 then
         else
             do return  end
         end
-        a14 = 0
-        a12 = w1[5]
-        a6, a7, a8 = nil
-        a6 = a3
-        a7 = a4
-        a4 = a2
-        a5 = 125
-        a6 = a3
-        a7 = a4
-        a8 = nil
-        a5 = 56
+        i3 = 0
+        i1 = w1[5]
+        v4, k2, v5 = nil
+        v4 = k1
+        k2 = v3
+        v3 = v2
+        n1 = 125
+        v4 = k1
+        k2 = v3
+        n1 = 56
         -- generic-for iterator (coroutine desugar) reg R9
-        a9, a10, a11 = coroutine.resume(a9, a10, a11)
-        if a9 then
+        v6, v7, v8 = coroutine.resume(v6, v7, v8)
+        if v6 then
         else
-            a11 = w1[5]
-            a12 = w1[5]
-            a13 = 100
-            a14 = 275
-            a15 = 55
+            v8 = w1[5]
+            i1 = w1[5]
+            i2 = 100
+            i3 = 275
+            i4 = 55
             repeat
-            until not ((a5 > 22))
+            until not ((n1 > 22))
         end
-        a10 = a7
-        a11 = a8
+        v7 = k2
+        v8 = v5
         -- generic-for iterator (coroutine desugar) reg R9
-            -- (constant test eliminated: if not ((a15 >= 144)) then)
-            a11 = w55
-        a4 = a1
+            -- (constant test eliminated: if not ((i4 >= 144)) then)
+            v8 = w55
+        v3 = v1
     end
-    w10 = 9
+    state = 9
     w92 = 77
-    a94 = a89
-    w95 = w25
-    a94(w95)
-    a94 = a89
-    w95 = a69
-    a94(w95)
+    fn1 = v73
+    w95 = v17
+    fn1(w95)
+    fn1 = v73
+    w95 = v56
+    fn1(w95)
     w93 = 13521840
-    a94 = a89
-    w95 = a73
-    a94(w95)
-    a94 = a89
-    w95 = a62
-    a94(w95)
-    a94 = w1[5]
+    fn1 = v73
+    w95 = v60
+    fn1(w95)
+    fn1 = v73
+    w95 = v49
+    fn1(w95)
+    fn1 = w1[5]
     w95 = w1[5]
-    a96 = w1[5]
-    w97, a98 = nil
-    w10 = 44
-    if (44 >= w10) then
-        a99 = a89
-        w100 = a81
-        a99(w100)
-        w10 = 27
-        a132 = "Y"
-        a132 = a130[a132]
-        a133 = "Scale"
-        a132 = a132[a133]
-        a132 = (a132 * 100)
-        a132 = (a132 // 1)
-        w101[94] = w28
-        a122 = 65
-        a132 = a119
-        a133 = "Y"
-        a133 = a130[a133]
-        a134 = "Scale"
-        a133 = a133[a134]
-        a134 = true
-        a132(a133, a134)
-        if (78 >= w10) then
-            a89 = function(a1, a2, a3, a4, a5, a6, a7, ...) -- F78
-                local L294, L457
-                a2 = w79
-                a3 = (not a1)
-                a2(a3)
-                a2 = UPVALS[a1]
-                a3 = "table"
-                a4 = w13
-                a5 = a1
-                a4 = a4(a5)
-                a2(a3, a4)
-                a2 = 116
-                    -- (constant test eliminated: if not ((67 >= a2)) then)
-                    a2 = 67
-                    a3 = w84
-                    a4 = w1[5]
-                    a5 = w48
-                    a6 = a1
-                    a5 = a5(a6)
-                    a3(a4, a5)
-                a3 = w45
-                a4 = w36
-                a5 = a1
-                a6 = w1[5]
-                a3(a4, a5, a6, a7)
+    v78 = w1[5]
+    w97, v80 = nil
+    state = 44
+    if (44 >= state) then
+        v81 = v73
+        w100 = v66
+        v81(w100)
+        state = 27
+        v99 = "Y"
+        v99 = b5[v99]
+        v100 = "Scale"
+        v99 = v99[v100]
+        v99 = (v99 * 100)
+        v99 = (v99 // 1)
+        w101[94] = k3
+        v94 = 65
+        v99 = v92
+        v100 = "Y"
+        v100 = b5[v100]
+        b6 = "Scale"
+        v100 = v100[b6]
+        b6 = true
+        v99(v100, b6)
+        if (78 >= state) then
+            v73 = function(v1, fn1, fn2, fn3, fn4, v2, a7, ...) -- F78
+                local v3, v4
+                fn1 = w79
+                fn2 = (not v1)
+                fn1(fn2)
+                fn1 = UPVALS[v1]
+                fn2 = "table"
+                fn3 = w13
+                fn4 = v1
+                fn3 = fn3(fn4)
+                fn1(fn2, fn3)
+                    -- (constant test eliminated: if not ((67 >= fn1)) then)
+                    fn2 = w84
+                    fn3 = w1[5]
+                    fn4 = w48
+                    v2 = v1
+                    fn4 = fn4(v2)
+                    fn2(fn3, fn4)
+                fn2 = w45
+                fn3 = w36
+                fn4 = v1
+                v2 = w1[5]
+                fn2(fn3, fn4, v2, a7)
                 do return  end
             end
-            w10 = 79
+            state = 79
         end
         w120 = 100
         w121 = w84
-        a122 = a119[30]
-        a123 = L7
-        a123 = a123()
+        v94 = v92[30]
+        v95 = L7
+        v95 = v95()
         w124 = 1
-        w121(a122, a123, w124, w125)
-        w121 = a119[25]
-        w101[23] = a99
+        w121(v94, v95, w124, w125)
+        w121 = v92[25]
+        w101[23] = v81
     else
-        a99 = {}
-        w95 = a99
-        a99 = {}
+        v81 = {}
+        w95 = v81
+        v81 = {}
         w100 = "lastlinedefined"
-        a99[w100] = -1
+        v81[w100] = -1
         w100 = "linedefined"
-        a99[w100] = -1
+        v81[w100] = -1
         w100 = "nparams"
-        a99[w100] = 0
+        v81[w100] = 0
         w100 = "short_src"
         w101 = "[C]"
-        a99[w100] = w101
+        v81[w100] = w101
         w100 = "source"
         w101 = "=[C]"
-        a99[w100] = w101
+        v81[w100] = w101
         w100 = "what"
         w101 = "C"
-        a99[w100] = w101
+        v81[w100] = w101
         w100 = "currentline"
-        a99[w100] = -1
+        v81[w100] = -1
         w100 = "namewhat"
         w101 = ""
     end
-    a59 = nil
-    w10 = 28
-    a128 = true
-    w125(a126, a127, a128, a129)
-    w10 = 71
-    a119 = w1[5]
+    state = 28
+    b4 = true
+    w125(b2, b3, b4, v97)
+    state = 71
+    v92 = w1[5]
     w120 = 67
         -- (constant test eliminated: if not ((w120 >= 70)) then)
         w120 = 70
         w121 = "new"
-        a119 = a81[w121]
+        v92 = v66[w121]
     w121 = w97
-    a122 = a119
-    a123 = "new"
-    w121(a122, a123)
+    v94 = v92
+    v95 = "new"
+    w121(v94, v95)
     w121 = w112
-    a122 = a119
-    a123 = {}
-    w121(a122, a123)
+    v94 = v92
+    v95 = {}
+    w121(v94, v95)
     w120 = 0
         -- (constant test eliminated: if not ((w120 > 0)) then)
         w121 = w1[5]
-        a122 = 28
+        v94 = 28
     w121 = w1[5]
-    a122 = 20
-    a122 = 323
-    a123 = 106
+    v94 = 20
+    v94 = 323
+    v95 = 106
     while true do
-        a133 = (a133 * 100)
-        a133 = (a133 // 1)
+        v100 = (v100 * 100)
+        v100 = (v100 // 1)
     end
-    a133 = a127[0]
-    a128 = a113; a127 = a113["GetService"]
-    a129 = "StarterPlayer"
-    a127 = a127(a128, a129)
-    w121 = a127
-    a114 = w112
-    a115 = w48
-    a114(a115)
-    w10 = 85
-    if not ((a132 ~= 87)) then
-        a126 = function(m1, a2, a3, a4, a5, a6, m7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, ...) -- F164
-            local L0, L278, L430
-            a2 = w12
-            a3 = m1
-            a4 = w1[170]
-            a2 = a2(a3, a4)
-            a3 = w7
-            a4 = m1
-            a5 = w1[170]
-            a3 = a3(a4, a5)
-            a3 = a3()
-            a4 = w1[5]
-            a5 = w1[5]
-            a6 = 83
-            m7 = 199
-            a8 = 25
-            a9 = 106
-            a15 = w83
-            a16 = a12
-            a17 = a10
-            a15(a16, a17)
-            a9 = 119
-            a15 = w83
-            a16 = a11
-            a17 = a12
-            a15(a16, a17)
-            while not ((a9 ~= 61)) do -- while-exit-cond
-                a9 = 120
-                a15 = w83
-                a16 = a8
-                a17 = m7
-                a15(a16, a17)
-                a11 = w55
-                a11()
+    v100 = b3[0]
+    b4 = v89; b3 = v89["GetService"]
+    v97 = "StarterPlayer"
+    b3 = b3(b4, v97)
+    w121 = b3
+    fn6 = w112
+    v90 = w48
+    fn6(v90)
+    state = 85
+    if not ((v99 ~= 87)) then
+        b2 = function(v2, fn1, fn2, v3, n1, v4, e7, v5, state, fn3, fn4, v6, v7, v8, fn5, v9, v10, a18, ...) -- F164
+            local v1, v11, v12
+            fn1 = w12
+            fn2 = v2
+            v3 = w1[170]
+            fn1 = fn1(fn2, v3)
+            fn2 = w7
+            v3 = v2
+            n1 = w1[170]
+            fn2 = fn2(v3, n1)
+            fn2 = fn2()
+            v3 = w1[5]
+            n1 = w1[5]
+            v4 = 83
+            e7 = 199
+            state = 106
+            fn5 = w83
+            v9 = v6
+            v10 = fn3
+            fn5(v9, v10)
+            state = 119
+            fn5 = w83
+            v9 = fn4
+            v10 = v6
+            fn5(v9, v10)
+            while not ((state ~= 61)) do -- while-exit-cond
+                state = 120
+                fn5 = w83
+                v9 = v5
+                v10 = e7
+                fn5(v9, v10)
+                fn4 = w55
+                fn4()
             end
-            a10 = w55
-            a10()
-            if not (a3) then
-                a10 = w55
-                a10()
+            fn3 = w55
+            fn3()
+            if not (fn2) then
+                fn3 = w55
+                fn3()
             end
-            if not (a4) then
-                a10 = w55
-                a10()
+            if not (v3) then
+                fn3 = w55
+                fn3()
             end
-            a9 = 103
-            a14 = (a8 + 0)
-            a15 = w83
-            a16 = a3
-            a17 = a6
-            a15(a16, a17)
-            a15 = w84
-            a16 = a6
-            a17 = a8
-            a15(a16, a17)
-            a9 = 61
-            a14 = w1[5]
-            a9 = 3
+            state = 103
+            v8 = (v5 + 0)
+            fn5 = w83
+            v9 = fn2
+            v10 = v4
+            fn5(v9, v10)
+            fn5 = w84
+            v9 = v4
+            v10 = v5
+            fn5(v9, v10)
+            state = 61
+            v8 = w1[5]
+            state = 3
             do -- (terminates control flow)
-                a15 = w83
-                a16 = a10
-                a17 = a14
-                a15(a16, a17)
-                a15 = w84
-                a16 = a14
-                a17 = a13
-                a15(a16, a17)
-                a15 = a11
-                do return a15 end
+                fn5 = w83
+                v9 = fn3
+                v10 = v8
+                fn5(v9, v10)
+                fn5 = w84
+                v9 = v8
+                v10 = v7
+                fn5(v9, v10)
+                fn5 = fn4
+                do return fn5 end
             end
-            a6 = w55
-            a6()
+            v4 = w55
+            v4()
             repeat
-            until not (a5)
-            m7 = w1[5]
-            a8 = w1[5]
-            a9 = 45
-            a10 = w16
-            a11 = UPVALS[a6]
-            a12 = m1
-            a13 = (a4 + 1)
-            a14 = (a5 - 1)
-            a10 = a10(a11(a12, a13, a14, a15))
-            a8 = a10
-            a10 = w18
-            a11 = m1
-            a12 = w1[170]
-            a13 = function(a1, a2, a3, ...) -- F170
-                local L121
-                m7 = a1
+            until not (n1)
+            e7 = w1[5]
+            v5 = w1[5]
+            state = 45
+            fn3 = w16
+            fn4 = UPVALS[v4]
+            v6 = v2
+            v7 = (v3 + 1)
+            v8 = (n1 - 1)
+            fn3 = fn3(fn4(v6, v7, v8, fn5))
+            v5 = fn3
+            fn3 = w18
+            fn4 = v2
+            v6 = w1[170]
+            v7 = function(v1, a2, a3, ...) -- F170
+                local v2
+                e7 = v1
                 do return  end
             end
-            a10(a11, a12, a13, a14)
-            a9 = 40
-            a13 = (m7 + 0)
-            m7 = L0
-            a9 = 103
-            a11 = w55
-            a11()
-            a11 = w1[5]
-            a12 = w1[5]
-            a13 = w1[5]
-            a10 = w14
-            a11 = m1
-            a12 = w1[170]
-            a10, a11, a12 = a10(a11, a12, a13)
-            a4 = a10
-            a5 = a11
-            a9 = 6
-            a11 = (a2 + 0)
-            L278 = (nil / L430)
+            fn3(fn4, v6, v7, v8)
+            state = 40
+            v7 = (e7 + 0)
+            e7 = v1
+            state = 103
+            fn4 = w55
+            fn4()
+            fn4 = w1[5]
+            v6 = w1[5]
+            v7 = w1[5]
+            fn3 = w14
+            fn4 = v2
+            v6 = w1[170]
+            fn3, fn4, v6 = fn3(fn4, v6, v7)
+            v3 = fn3
+            n1 = fn4
+            state = 6
+            fn4 = (fn1 + 0)
+            v11 = (nil / v12)
             repeat
-            until not (a6)
-            a10 = w55
-            a10()
-            a9 = 105
-            a9 = 26
-            a15 = w83
-            a16 = a2
-            a17 = a3
-            a15(a16, a17)
-            a9 = 52
-            a10 = (a6 + 0)
-            a9 = 40
-            a10 = w21
-            a11 = m1
-            a12 = (a4 + 1)
-            a13 = (a5 - 1)
-            a10 = a10(a11, a12, a13)
-            a6 = a10
-            a12 = (a3 + 0)
-            a9 = 45
+            until not (v4)
+            fn3 = w55
+            fn3()
+            state = 105
+            state = 26
+            fn5 = w83
+            v9 = fn1
+            v10 = fn2
+            fn5(v9, v10)
+            state = 52
+            fn3 = (v4 + 0)
+            state = 40
+            fn3 = w21
+            fn4 = v2
+            v6 = (v3 + 1)
+            v7 = (n1 - 1)
+            fn3 = fn3(fn4, v6, v7)
+            v4 = fn3
+            v6 = (fn2 + 0)
+            state = 45
         end
-        a133 = a126
-        a134 = w120
-        a133 = a133(a134)
-        a127 = a133
+        v100 = b2
+        b6 = w120
+        v100 = v100(b6)
+        b3 = v100
     end
-        -- (constant test eliminated: if not ((a123 >= 154)) then)
-        a119 = w1[w1]
+        -- (constant test eliminated: if not ((v95 >= 154)) then)
+        v92 = w1[w1]
     w124 = w83
     w125 = w13
-    a126 = a119
-    w125 = w125(a126)
-    a126 = "userdata"
-    a127 = true
-    w124(w125, a126, a127, a128)
-    if (a126 == 106) then
-        a127 = w118
-        a128 = w121
-        a129 = "StarterPlayer"
-        a127(a128, a129)
+    b2 = v92
+    w125 = w125(b2)
+    b2 = "userdata"
+    b3 = true
+    w124(w125, b2, b3, b4)
+    if (b2 == 106) then
+        b3 = w118
+        b4 = w121
+        v97 = "StarterPlayer"
+        b3(b4, v97)
     end
-    a128 = "Parent"
-    a123[a128] = w121
-    a129 = a123; a128 = a123["SetControlPoints"]
-    a130 = {} -- size 4
-    a131 = w24
-    a132 = a114
-    a133 = 0.0625
-    a134 = -2
-    a135 = 0
-    a136 = 2
-    a132 = a132(a133, a134, a135, a136)
-    a133 = a114
-    a134 = 0.125
-    a135 = -1
-    a136 = 0
-    a137 = -3
-    a133 = a133(a134, a135, a136, a137)
-    a134 = a114
-    a135 = 0
-    a136 = 0
-    a137 = 0
-    a138 = 0
-    a131 = a131(a132, a133, a134(a135, a136, a137, a138, a139))
-    a132 = w24
-    a133 = a114
-    a134 = 0.375
-    a135 = 7
-    a136 = 0.125
-    a137 = -2
-    a133 = a133(a134, a135, a136, a137)
-    a134 = a114
-    a135 = 0
-    a136 = 2
-    a137 = 0
-    a138 = -6
-    a134 = a134(a135, a136, a137, a138)
-    a135 = a114
-    a136 = 0
-    a137 = 0
-    a138 = 0
-    a139 = 0
-    a132 = a132(a133, a134, a135(a136, a137, a138, a139, a140))
-    a133 = w24
-    a134 = a114
-    a135 = 0.5
-    a136 = -4
-    a137 = 0.375
-    a138 = -7
-    a134 = a134(a135, a136, a137, a138)
-    a135 = a114
-    a136 = 0
-    a137 = -6
-    a138 = 0.125
-    a139 = 7
-    a135 = a135(a136, a137, a138, a139)
-    a136 = a114
-    a137 = 0
-    a138 = 1
-    a139 = 0
-    a140 = -4
-    a133 = a133(a134, a135, a136(a137, a138, a139, a140, a141))
-    a134 = w24
-    a135 = a114
-    a136 = 0
-    a137 = -1
-    a138 = 0
-    a139 = -4
-    a135 = a135(a136, a137, a138, a139)
-    a136 = a114
-    a137 = 0
-    a123 = w118[14]
+    b4 = "Parent"
+    v95[b4] = w121
+    v97 = v95; b4 = v95["SetControlPoints"]
+    b5 = {} -- size 4
+    v98 = v16
+    v99 = fn6
+    v100 = 0.0625
+    b6 = -2
+    v101 = 0
+    v102 = 2
+    v99 = v99(v100, b6, v101, v102)
+    v100 = fn6
+    b6 = 0.125
+    v101 = -1
+    v102 = 0
+    fn10 = -3
+    v100 = v100(b6, v101, v102, fn10)
+    b6 = fn6
+    v101 = 0
+    v102 = 0
+    fn10 = 0
+    v103 = 0
+    v98 = v98(v99, v100, b6(v101, v102, fn10, v103, v104))
+    v99 = v16
+    v100 = fn6
+    b6 = 0.375
+    v101 = 7
+    v102 = 0.125
+    fn10 = -2
+    v100 = v100(b6, v101, v102, fn10)
+    b6 = fn6
+    v101 = 0
+    v102 = 2
+    fn10 = 0
+    v103 = -6
+    b6 = b6(v101, v102, fn10, v103)
+    v101 = fn6
+    v102 = 0
+    fn10 = 0
+    v103 = 0
+    v99 = v99(v100, b6, v101(v102, fn10, v103, v104, v105))
+    v100 = v16
+    b6 = fn6
+    v101 = 0.5
+    v102 = -4
+    fn10 = 0.375
+    v103 = -7
+    b6 = b6(v101, v102, fn10, v103)
+    v101 = fn6
+    v102 = 0
+    fn10 = -6
+    v103 = 0.125
+    v101 = v101(v102, fn10, v103, v104)
+    v102 = fn6
+    fn10 = 0
+    v103 = 1
+    v105 = -4
+    v100 = v100(b6, v101, v102(fn10, v103, v104, v105, v106))
+    b6 = v16
+    v101 = fn6
+    v102 = 0
+    fn10 = -1
+    v103 = 0
+    v101 = v101(v102, fn10, v103, v104)
+    v102 = fn6
+    fn10 = 0
+    v95 = w118[14]
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w120 = 13
-    w24 = Path2DControlPoint.new
-    w10 = 17
+    v16 = Path2DControlPoint.new
+    state = 17
     w121 = w84
-    a122 = w118[18]
-    a123 = L7
-    a123 = a123()
+    v94 = w118[18]
+    v95 = L7
+    v95 = v95()
     w124 = 1
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w121 = w118[12]
-    w101[2] = w24
+    w101[2] = v16
     w121 = 124
-    a122 = 176
-    a123 = 26
-    w121 = a119[46]
-    w101[38] = w4
+    v94 = 176
+    v95 = 26
+    w121 = v92[46]
+    w101[38] = taskLib
     w121 = w84
-    a122 = a119[46]
-    a123 = L7
-    a123 = a123()
+    v94 = v92[46]
+    v95 = L7
+    v95 = v95()
     w124 = 1
-    w121(a122, a123, w124, w125)
-    w121 = a119[41]
-    w101[39] = a59
+    w121(v94, v95, w124, w125)
+    w121 = v92[41]
+    w101[39] = v46
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[41]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[41]
     w124 = 2
-    w121(a122, a123, w124, w125)
-    w121 = a119[40]
+    w121(v94, v95, w124, w125)
+    w121 = v92[40]
     w101[40] = w92
     w121 = 118
-    a122 = 171
-    a123 = 33
+    v94 = 171
+    v95 = 33
     repeat
-    until not ((w10 ~= 8))
-    if not ((w10 >= 53)) then
-        a127 = {}
-        a128 = w1[171]
-        a129 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, ...) -- F364
-            a3 = w1[5]
-            a4 = 28
-            a5 = 50
-            a6 = 22
-            if not ((17 >= a12)) then
-                a13 = w125
-                a14 = a8
-                a13(a14)
-            end
+    until not ((state ~= 8))
+    if not ((state >= 53)) then
+        b3 = {}
+        b4 = w1[171]
+        v97 = function(t1, k1, k2, fn1, i1, i2, n1, t2, i3, i4, i5, n2, fn2, v1, a15, a16, ...) -- F364
+            k2 = w1[5]
+            i1 = 50
+            i2 = 22
+                -- (constant test eliminated: if not ((17 >= n2)) then)
+                fn2 = w125
+                v1 = t2
+                fn2(v1)
             do -- (terminates control flow)
                 repeat
-                until not ((a7 ~= 50))
+                until not ((n1 ~= 50))
                 UP324[nil] = nil
-                a8 = w107[a3]
-                a9 = 17
-                a10 = 224
-                a11 = 71
-                a4 = w55
-                a4()
+                t2 = w107[k2]
+                i3 = 17
+                i4 = 224
+                i5 = 71
+                fn1 = w55
+                fn1()
                 do return  end
             end
-            if (a12 >= 88) then
-                if not ((88 >= a12)) then
-                    a13 = a1[a2]
-                    do return a13 end
-                end
-            end
-            a13 = w1[5]
-            w107[a3] = a13
-            a8 = a1[0]
-            a3 = a8[a2]
+            fn2 = w1[5]
+            w107[k2] = fn2
+            t2 = t1[0]
+            k2 = t2[k1]
         end
-        a127[a128] = a129
-        a126 = a127
-        w10 = 53
+        b3[b4] = v97
+        b2 = b3
+        state = 53
     end
-    a127 = w1[5]
-    a128 = w1[5]
-    a129 = 65
-    if not ((a129 >= 65)) then
-        if not ((not a127)) then
+    b3 = w1[5]
+    b4 = w1[5]
+    v97 = 65
+    if not ((v97 >= 65)) then
+        if not ((not b3)) then
         end
-        a128 = function(a1, a2, a3, ...) -- F293
-            a1 = w3
-            a2 = w1[172]
-            a1(a2)
+        b4 = function(fn1, v1, a3, ...) -- F293
+            fn1 = w3
+            v1 = w1[172]
+            fn1(v1)
         end
     end
-    a130 = w45
-    a131 = a99
-    a132 = w11
-    a133 = " --[[%s]] return setfenv(function(...) return %s(...) end, setmetatable({ [\"%s\"] = ... }, { __index = getfenv((...)) })) "
-    a134 = "\n				 .@%(/*,.......      ...,,*/(#%&@@.\n			 (*   ,/(#%%&&@@@@&%((////(((##%###((/**,,.     ,//(&.\n		   /* .%@@@@@@@@%,  .(&@@@&&&&&&@@@@@@&#(*,........*%@@@(.  ,#.\n		 */ .&@@@@@@@*  (%,   *(&&@@@@@&%(*,.             .,*(#%(*@@&*  *,\n		#, /@@@@@@* *&( ,&&/.,/#%&&@@@&(&@@@@@@@@@@@@#*,.....,/&@@@@@@@@( .%\n	   #  #@@@@@*/@% .#%./(,.,/*,//*,.,/(*@@@@@@@@@@@@%@@@@@@@@@#.#@@@@@@&. %\n	  /  &@@@@@@@@(%@# *&&*&@@@@#/&@@@@/%%.,%@@@@@@@%/@@&(,  ,,,...  *%@@@# *\n	#  .&@@@@@@@@@@@,((%@@@@@#.    ,&@@#@@&* .&@@@@@&,.#@@@@/&@@%(@@@&(/,(&, /,\n (/   (@&&&%&@@@&/, ,@#(@@@@,        #@@/,&@& /@@@@@,%#%@@@@@(     *@@@@@&,%%. .\n/  #/,#@@@&#(//#@@@/ %@@@&@@@(.    ,&@@(.*/*  %@@*   %@@@@@@%       (@@&(*...%&.\n ///@@&,  (&@@#,   /@/ ,*&@@@@#&@@%#%((%@&* /@@@@@@&. #@@@#&@@@&%%@@@@@@&,/(*@/#\n%%.&@# .&@@@# /@@@@%&@@@&/.   ,/((/*,  ./&@@@@@@@@@@,*&(./%@@#*&@@@(#(....,&#*@/\n@%.&& .&@@@&*    /&@@@@@@@@@@@@@@@@&@@#/(%@@@@@@@@@@&,  (@@@@@@@@@@@@/,@@@@@#.&*\n&&,%% .&*    /@@@(.  ,(@@@@@&/(////#( /&@@@@@@@@@@@@@@@(  ,&@@@@@@@@&, (@@&*/@(/\n.%*#@( /@@@@( *@@@@@@/     *%@@@@@@@&.,@& ,#, .&@@@@@@# .#*%&/,#@@@@*   *@@&/*&*\n .&/.#@@@@@@@,   *&@@%.,&@@&(,    ,(%@%&@@@@@@@@@(.*,  /@@@@@@@@@&,      %@@@@..\n@* .%@@@@@@@@(       .   (@@@@@@@@(       .*(%&@@@@@@@@@@@@&(,  ./.*@%   /@@% ./\n  @* .&@@@@@@&.             ./&@@@*.&@@@@@@@&, ,**,.    .,*(&(.%@@# %@*  ,@@% ,#\n	&, /@@@@@@*                    .#@@@@@@@@*.%@@@@@(,@@@@@@& ,%(.      .&@% ,#\n	  / *@@@@@#                                                           %@&.,#\n	  (( .&@@@@*                                                          #@&.,#\n	   .&. ,&@@@,                                                         (@&.,#\n		  #. .%@@* /@@/                                                   /@&.,(\n			./  #@%. %@&,,#,                                              /@@,./\n			  *(  #@%. . (@@@@@%/,                                        /@@,.*\n				//  %@&, *@@@@@@@@( (@%/.                                 #@@, (\n				  #* .&@@#. (@@@@&.*@@@@@@@@%. */.                  *..%*.&@@, /\n					@* .%@@@%, ,/ .@@@@@@@@@@,.%@@@@@% .&@@@* #@&..&@*,* %@@&. *\n					   /  *&@@@@%,   *(&@@@@&. #@@@@@* #@@@% (@@* ,.   /@@@@* (\n						 @#. .#@@@@@@&(,.                      .,*(%&@@@@@&..(\n							 &(.   ./%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@(. ((\n								  ,#/*.       ..,,,,,,,,....          ,/#\n\n"
-    a135 = w1[173]
-    a136 = w1[173]
-    a132 = a132(a133, a134, a135, a136)
-    a133 = w1[174]
-    a134 = w1[5]
-    a130, a131, a132 = a130(a131, a132, a133, a134, a135)
-    a127 = a130
-    a128 = a131
-    a129 = 44
-        -- (constant test eliminated: if not ((16 >= w10)) then)
+    b5 = w45
+    v98 = v81
+    v99 = v6
+    v100 = " --[[%s]] return setfenv(function(...) return %s(...) end, setmetatable({ [\"%s\"] = ... }, { __index = getfenv((...)) })) "
+    b6 = "\n				 .@%(/*,.......      ...,,*/(#%&@@.\n			 (*   ,/(#%%&&@@@@&%((////(((##%###((/**,,.     ,//(&.\n		   /* .%@@@@@@@@%,  .(&@@@&&&&&&@@@@@@&#(*,........*%@@@(.  ,#.\n		 */ .&@@@@@@@*  (%,   *(&&@@@@@&%(*,.             .,*(#%(*@@&*  *,\n		#, /@@@@@@* *&( ,&&/.,/#%&&@@@&(&@@@@@@@@@@@@#*,.....,/&@@@@@@@@( .%\n	   #  #@@@@@*/@% .#%./(,.,/*,//*,.,/(*@@@@@@@@@@@@%@@@@@@@@@#.#@@@@@@&. %\n	  /  &@@@@@@@@(%@# *&&*&@@@@#/&@@@@/%%.,%@@@@@@@%/@@&(,  ,,,...  *%@@@# *\n	#  .&@@@@@@@@@@@,((%@@@@@#.    ,&@@#@@&* .&@@@@@&,.#@@@@/&@@%(@@@&(/,(&, /,\n (/   (@&&&%&@@@&/, ,@#(@@@@,        #@@/,&@& /@@@@@,%#%@@@@@(     *@@@@@&,%%. .\n/  #/,#@@@&#(//#@@@/ %@@@&@@@(.    ,&@@(.*/*  %@@*   %@@@@@@%       (@@&(*...%&.\n ///@@&,  (&@@#,   /@/ ,*&@@@@#&@@%#%((%@&* /@@@@@@&. #@@@#&@@@&%%@@@@@@&,/(*@/#\n%%.&@# .&@@@# /@@@@%&@@@&/.   ,/((/*,  ./&@@@@@@@@@@,*&(./%@@#*&@@@(#(....,&#*@/\n@%.&& .&@@@&*    /&@@@@@@@@@@@@@@@@&@@#/(%@@@@@@@@@@&,  (@@@@@@@@@@@@/,@@@@@#.&*\n&&,%% .&*    /@@@(.  ,(@@@@@&/(////#( /&@@@@@@@@@@@@@@@(  ,&@@@@@@@@&, (@@&*/@(/\n.%*#@( /@@@@( *@@@@@@/     *%@@@@@@@&.,@& ,#, .&@@@@@@# .#*%&/,#@@@@*   *@@&/*&*\n .&/.#@@@@@@@,   *&@@%.,&@@&(,    ,(%@%&@@@@@@@@@(.*,  /@@@@@@@@@&,      %@@@@..\n@* .%@@@@@@@@(       .   (@@@@@@@@(       .*(%&@@@@@@@@@@@@&(,  ./.*@%   /@@% ./\n  @* .&@@@@@@&.             ./&@@@*.&@@@@@@@&, ,**,.    .,*(&(.%@@# %@*  ,@@% ,#\n	&, /@@@@@@*                    .#@@@@@@@@*.%@@@@@(,@@@@@@& ,%(.      .&@% ,#\n	  / *@@@@@#                                                           %@&.,#\n	  (( .&@@@@*                                                          #@&.,#\n	   .&. ,&@@@,                                                         (@&.,#\n		  #. .%@@* /@@/                                                   /@&.,(\n			./  #@%. %@&,,#,                                              /@@,./\n			  *(  #@%. . (@@@@@%/,                                        /@@,.*\n				//  %@&, *@@@@@@@@( (@%/.                                 #@@, (\n				  #* .&@@#. (@@@@&.*@@@@@@@@%. */.                  *..%*.&@@, /\n					@* .%@@@%, ,/ .@@@@@@@@@@,.%@@@@@% .&@@@* #@&..&@*,* %@@&. *\n					   /  *&@@@@%,   *(&@@@@&. #@@@@@* #@@@% (@@* ,.   /@@@@* (\n						 @#. .#@@@@@@&(,.                      .,*(%&@@@@@&..(\n							 &(.   ./%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@(. ((\n								  ,#/*.       ..,,,,,,,,....          ,/#\n\n"
+    v101 = w1[173]
+    v102 = w1[173]
+    v99 = v99(v100, b6, v101, v102)
+    v100 = w1[174]
+    b6 = w1[5]
+    b5, v98, v99 = b5(v98, v99, v100, b6, v101)
+    b3 = b5
+    b4 = v98
+    v97 = 44
+        -- (constant test eliminated: if not ((16 >= state)) then)
     w101 = w97
-    a102 = a68
-    a103 = "rawget"
-    w101(a102, a103)
-    w10 = 101
-    w125 = w125[a126]
-    a126 = "EnumType"
-    w125 = w125[a126]
-    a126 = w125; w125 = w125["FromValue"]
-    a127 = 1
-    w125 = w125(a126, a127)
+    fn2 = v55
+    fn3 = "rawget"
+    w101(fn2, fn3)
+    state = 101
+    w125 = w125[b2]
+    b2 = "EnumType"
+    w125 = w125[b2]
+    b2 = w125; w125 = w125["FromValue"]
+    b3 = 1
+    w125 = w125(b2, b3)
     w125 = w125[0]
-    a126 = w125; w125 = w125["FromValue"]
-    a127 = 1
-    w125 = w125(a126, a127)
-    a126 = "EnumType"
-    w125 = w125[a126]
-    a126 = w125; w125 = w125["FromValue"]
-    a127 = 1
-    w125 = w125(a126, a127)
-    a126 = "EnumType"
-    w125 = w125[a126]
-    a126 = w125; w125 = w125["FromName"]
-    a127 = "OuterBox"
-    w125 = w125(a126, a127)
+    b2 = w125; w125 = w125["FromValue"]
+    b3 = 1
+    w125 = w125(b2, b3)
+    b2 = "EnumType"
+    w125 = w125[b2]
+    b2 = w125; w125 = w125["FromValue"]
+    b3 = 1
+    w125 = w125(b2, b3)
+    b2 = "EnumType"
+    w125 = w125[b2]
+    b2 = w125; w125 = w125["FromName"]
+    b3 = "OuterBox"
+    w125 = w125(b2, b3)
     w120 = w125
         -- (constant test eliminated: if (97 >= w124) then)
-    a41 = w1[5]
-    a42 = w1[5]
-    a43 = w1[5]
-    a44 = w1[5]
+    v29 = w1[5]
+    v30 = w1[5]
+    v31 = w1[5]
+    v32 = w1[5]
     w45 = w1[5]
     w46 = w1[5]
-    a47 = nil
     w48 = w1[5]
-    w10 = 34
-    a119 = 1
+    state = 34
+    v92 = 1
     w120 = 9
     w121 = 1
-    a122 = 120
-    a128 = "X"
-    a128 = a126[a128]
-    a128 = a128[0]
-    a128 = (a128 * 100)
-    a128 = (a128 // 1)
-    w101[85] = a89
-    a128 = a119
-    a129 = "X"
-    a129 = a126[a129]
-    a130 = "Scale"
-    a129 = a129[a130]
-    a130 = true
-    a128(a129, a130)
-    a137 = a119
-    a138 = "Y"
-    a138 = a131[a138]
-    a139 = true
-    a137(a138, a139)
-    a103(a104, a105)
-    a103 = UDim.new
-    a104 = w97
-    a105 = w18
-    a106 = "gsub"
-    a104(a105, a106)
-    a104 = w97
-    a105 = w21
-    a106 = "sub"
-    w77 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, ...) -- F340
-        local L228, L382, L506
-        a3 = w1[5]
-        a4 = w1[5]
-        a5 = w1[5]
-        a6 = w1[5]
-        a7 = 50
-        a8 = 325
-        a9 = 85
+    v94 = 120
+    b4 = "X"
+    b4 = b2[b4]
+    b4 = b4[0]
+    b4 = (b4 * 100)
+    b4 = (b4 // 1)
+    w101[85] = v73
+    b4 = v92
+    v97 = "X"
+    v97 = b2[v97]
+    b5 = "Scale"
+    v97 = v97[b5]
+    b5 = true
+    b4(v97, b5)
+    fn10 = v92
+    v103 = "Y"
+    v103 = v98[v103]
+    v104 = true
+    fn10(v103, v104)
+    fn3(fn4, v82)
+    fn3 = UDim.new
+    fn4 = w97
+    v82 = w18
+    v83 = "gsub"
+    fn4(v82, v83)
+    fn4 = w97
+    v82 = w21
+    v83 = "sub"
+    w77 = function(k1, n1, v1, v2, n2, n3, i1, i2, v3, n4, n5, v4, v5, state, n7, n8, n9, n10, v6, i3, v7, n11, v8, a24, a25, ...) -- F340
+        local v9, v10, v11
+        v1 = w1[5]
+        v2 = w1[5]
+        n2 = w1[5]
+        n3 = w1[5]
+        i1 = 50
+        i2 = 325
         while true do
-            a14 = 21
-            a15 = (a6 + 4)
-            a16 = w1[5]
-            a17 = 0
-                -- (constant test eliminated: if (0 >= a17) then)
-                a18 = w54
-                a19 = a1
-                a20 = a6
-                a18 = a18(a19, a20)
-                a16 = a18
-                a18 = bit32.band(a16, 255)
-                a11 = bit32.bxor(a9, a18)
-                a12 = (a11 * 435)
-                a17 = 95
-                a9 = (a12 % a5)
-            a3 = 2216829733
-            a4 = 3421674724
+            state = 21
+            n7 = (n3 + 4)
+            n8 = w1[5]
+            n9 = 0
+                -- (constant test eliminated: if (0 >= n9) then)
+                n10 = w54
+                v6 = k1
+                i3 = n3
+                n10 = n10(v6, i3)
+                n8 = n10
+                n10 = bit32.band(n8, 255)
+                n5 = bit32.bxor(v3, n10)
+                v4 = (n5 * 435)
+                n9 = 95
+                v3 = (v4 % n2)
+            if not ((n4 >= 220)) then
+                n2 = 4294967296
+                while true do
+                    n4 = w1[5]
+                    n5 = w1[5]
+                    v4 = w1[5]
+                    v5 = w1[5]
+                    state = 124
+                end
+            end
+            v2 = 3421674724
         end
-        a18 = (a11 * 256)
-        a18 = (a13 + a18)
-        a19 = (a10 * 435)
-        a18 = (a18 + a19)
-        a10 = (a18 % a5)
-        a18 = bit32.rshift(a16, 24)
-        a11 = bit32.bxor(a9, a18)
-        a12 = (a11 * 435)
-        a9 = (a12 % a5)
-        a18 = 15
-        a19 = 168
-        a20 = 30
-        a18 = bit32.rshift(a16, 16)
-        a18 = bit32.band(a18, 255)
-        a11 = bit32.bxor(a9, a18)
-        a12 = (a11 * 435)
-        a9 = (a12 % a5)
-        a17 = 98
-        a17 = 89
-        a18 = (a12 - a9)
-        a13 = (a18 / a5)
-        a17 = 4
-        a18 = (a11 * 256)
-        a18 = (a13 + a18)
-        a19 = (a10 * 435)
-        a18 = (a18 + a19)
-        a10 = (a18 % a5)
-        if (4 >= a17) then
+        n10 = (n5 * 256)
+        n10 = (v5 + n10)
+        v6 = (n4 * 435)
+        n10 = (n10 + v6)
+        n4 = (n10 % n2)
+        n10 = bit32.rshift(n8, 24)
+        n5 = bit32.bxor(v3, n10)
+        v4 = (n5 * 435)
+        v3 = (v4 % n2)
+        n10 = 15
+        i3 = 30
+        n10 = bit32.rshift(n8, 16)
+        n10 = bit32.band(n10, 255)
+        n5 = bit32.bxor(v3, n10)
+        v4 = (n5 * 435)
+        v3 = (v4 % n2)
+        n9 = 98
+        n9 = 89
+        n10 = (v4 - v3)
+        v5 = (n10 / n2)
+        n9 = 4
+        n10 = (n5 * 256)
+        n10 = (v5 + n10)
+        v6 = (n4 * 435)
+        n10 = (n10 + v6)
+        n4 = (n10 % n2)
+        if (4 >= n9) then
         else
         end
         do -- (terminates control flow)
-            a15 = a9
-            a16 = a10
+            n7 = v3
+            n8 = n4
             do return  end
         end
-        a16 = (a11 * 256)
-        a16 = (a13 + a16)
-        a17 = (a10 * 435)
-        a16 = (a16 + a17)
-        a10 = (a16 % a5)
-        a15 = 19
-        a6 = (a6 + 1)
-        if not ((a6 >= a2)) then
-            a15 = 101
-            a12 = (a11 * 435)
-            a9 = (a12 % a5)
-            a16 = (a12 - a9)
-            a13 = (a16 / a5)
-            a15 = 4
+        n8 = (n5 * 256)
+        n8 = (v5 + n8)
+        n9 = (n4 * 435)
+        n8 = (n8 + n9)
+        n4 = (n8 % n2)
+        n7 = 19
+        n3 = (n3 + 1)
+        if not ((n3 >= n1)) then
+            n7 = 101
+            v4 = (n5 * 435)
+            v3 = (v4 % n2)
+            n8 = (v4 - v3)
+            v5 = (n8 / n2)
+            n7 = 4
         end
-        a14 = 112
-        a22 = (a12 - a9)
-        a13 = (a22 / a5)
-        a22 = (a11 * 256)
-        a22 = (a13 + a22)
-        a23 = (a10 * 435)
-        a22 = (a22 + a23)
-        a10 = (a22 % a5)
-        a6 = 0
-        a16 = a16(a17, a18)
-        a11 = bit32.bxor(a9, a16)
-        a15 = 0
-        a18 = (a12 - a9)
-        a13 = (a18 / a5)
-        a18 = (a11 * 256)
-        a18 = (a13 + a18)
-        a19 = (a10 * 435)
-        a18 = (a18 + a19)
-        a10 = (a18 % a5)
-        a18 = bit32.rshift(a16, 8)
-        a18 = bit32.band(a18, 255)
-        a11 = bit32.bxor(a9, a18)
-        a12 = (a11 * 435)
-        a9 = (a12 % a5)
-        a18 = (a12 - a9)
-        a13 = (a18 / a5)
-        a17 = 121
-        L382 = (L228 * L506)
-        a6 = (a6 + 4)
-        a16 = w46
-        a17 = a1
-        a18 = a6
-        a13 = nil
+        state = 112
+        n11 = (v4 - v3)
+        v5 = (n11 / n2)
+        n11 = (n5 * 256)
+        n11 = (v5 + n11)
+        v8 = (n4 * 435)
+        n11 = (n11 + v8)
+        n4 = (n11 % n2)
+        n3 = 0
+        n8 = n8(n9, n10)
+        n5 = bit32.bxor(v3, n8)
+        n7 = 0
+        n10 = (v4 - v3)
+        v5 = (n10 / n2)
+        n10 = (n5 * 256)
+        n10 = (v5 + n10)
+        v6 = (n4 * 435)
+        n10 = (n10 + v6)
+        n4 = (n10 % n2)
+        n10 = bit32.rshift(n8, 8)
+        n10 = bit32.band(n10, 255)
+        n5 = bit32.bxor(v3, n10)
+        v4 = (n5 * 435)
+        v3 = (v4 % n2)
+        n10 = (v4 - v3)
+        v5 = (n10 / n2)
+        n9 = 121
+        v10 = (v9 * v11)
+        n3 = (n3 + 4)
+        n8 = w46
+        n9 = k1
+        n10 = n3
     end
-    w10 = 95
-    a123(w124, w125, a126, a127)
+    state = 95
+    v95(w124, w125, b2, b3)
     w125 = "EnumType"
-    a123 = w120[w125]
+    v95 = w120[w125]
     w124 = 26
-    a127 = a127()
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    a122 = L7
-    a122 = a122()
-    a123 = a119[47]
+    b3 = b3()
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    v94 = L7
+    v94 = v94()
+    v95 = v92[47]
     w124 = 2
-    w121(a122, a123, w124, w125)
-    a106(w107, w108)
-    a106 = w97
-    w107 = a35
+    w121(v94, v95, w124, w125)
+    v83(w107, w108)
+    v83 = w97
+    w107 = v23
     w108 = "resume"
-    a106(w107, w108)
-    a106 = ENV.workspace
+    v83(w107, w108)
+    v83 = ENV.workspace
     w107 = w97
-    w108 = a56
-    a109 = "wrap"
-    w107(w108, a109)
-    w10 = 109
-    if (w10 ~= 104) then
+    w108 = v43
+    v86 = "wrap"
+    w107(w108, v86)
+    state = 109
+    if (state ~= 104) then
     else
         w107 = w97
-        w108 = a43
-        a109 = "spawn"
-        w107(w108, a109)
+        w108 = v31
+        v86 = "spawn"
+        w107(w108, v86)
         w107 = w97
-        w108 = a44
-        a109 = "defer"
-        w107(w108, a109)
+        w108 = v32
+        v86 = "defer"
+        w107(w108, v86)
         w107 = w97
-        w108 = a47
-        a109 = "delay"
-        w107(w108, a109)
+        w108 = v35
+        v86 = "delay"
+        w107(w108, v86)
         w107 = w97
-        w108 = a105
-        a109 = "wait"
-        w107(w108, a109)
+        w108 = v82
+        v86 = "wait"
+        w107(w108, v86)
         w107 = w1[5]
-        w10 = 66
+        state = 66
         while true do
-            w107 = w0
+            w107 = v1
             w108 = w97
-            a109 = a53
+            v86 = k6
             w110 = "traceback"
-            w108(a109, w110)
+            w108(v86, w110)
             w108 = w1[5]
-            a109 = w1[5]
-            w10 = 41
-            if (w10 >= 116) then
+            v86 = w1[5]
+            state = 41
+            if (state >= 116) then
                 w110 = function(a1, ...) -- F202
                     do return  end
                 end
-                a109 = w110
-                w110 = function(n1, a2, a3, a4, a5, a6, ...) -- F212
-                    a2 = w8
-                    a2 = w108
-                    a2()
-                    a2 = w93
-                    a2 = (892841 * a2)
-                    a2 = (a2 + 297308)
-                    a2 = (a2 % 16777216)
-                    w93 = a2
-                    a2 = w93
-                    a2 = (888359 * a2)
-                    a2 = (a2 + 5530975)
-                    a2 = (a2 % 16777216)
-                    w93 = a2
-                    a2 = w93
-                    a2 = (517693 * a2)
-                    a2 = (a2 + 10063901)
-                    a2 = (a2 % 16777216)
-                    w93 = a2
-                    a2 = w93
-                    a2 = (34723 * a2)
-                    a2 = (a2 + 6399898)
-                    a2 = (a2 % 16777216)
-                    w93 = a2
-                    a2 = w93
+                v86 = w110
+                w110 = function(n1, n2, v1, fn1, a5, a6, ...) -- F212
+                    n2 = w8
+                    n2 = w108
+                    n2()
+                    n2 = w93
+                    n2 = (892841 * n2)
+                    n2 = (n2 + 297308)
+                    n2 = (n2 % 16777216)
+                    w93 = n2
+                    n2 = w93
+                    n2 = (888359 * n2)
+                    n2 = (n2 + 5530975)
+                    n2 = (n2 % 16777216)
+                    w93 = n2
+                    n2 = w93
+                    n2 = (517693 * n2)
+                    n2 = (n2 + 10063901)
+                    n2 = (n2 % 16777216)
+                    w93 = n2
+                    n2 = w93
+                    n2 = (34723 * n2)
+                    n2 = (n2 + 6399898)
+                    n2 = (n2 % 16777216)
+                    w93 = n2
+                    n2 = w93
                     do -- (terminates control flow)
                         while true do
-                            a2 = (a2 + 11944249)
-                            a2 = (a2 % 16777216)
+                            n2 = (n2 + 11944249)
+                            n2 = (n2 % 16777216)
                         end
                         while true do
-                            a2 = w93
-                            a2 = (619511 * a2)
-                            a2 = (a2 + 13158945)
-                            a2 = (a2 % 16777216)
-                            w93 = a2
-                            a2 = w93
+                            n2 = w93
+                            n2 = (619511 * n2)
+                            n2 = (n2 + 13158945)
+                            n2 = (n2 % 16777216)
+                            w93 = n2
+                            n2 = w93
                         end
-                        a3 = w93
-                        a3 = (211673 * a3)
-                        a3 = (a3 + 16505416)
-                        a3 = (a3 % 16777216)
-                        w93 = a3
+                        v1 = w93
+                        v1 = (211673 * v1)
+                        v1 = (v1 + 16505416)
+                        v1 = (v1 % 16777216)
+                        w93 = v1
                         do return  end
                     end
-                    a2 = (884145 * a2)
+                    n2 = (884145 * n2)
                     do -- (terminates control flow)
-                        a2 = (a2 + 8368439)
-                        a2 = (a2 % 16777216)
-                        w93 = a2
-                        a2 = w93
-                        a2 = (892893 * a2)
-                        a2 = (a2 + 1892924)
-                        a2 = (a2 % 16777216)
-                        w93 = a2
+                        n2 = (n2 + 8368439)
+                        n2 = (n2 % 16777216)
+                        w93 = n2
+                        n2 = w93
+                        n2 = (892893 * n2)
+                        n2 = (n2 + 1892924)
+                        n2 = (n2 % 16777216)
+                        w93 = n2
                         do return  end
                     end
-                    a2 = w110
-                    a3 = (n1 + 1)
-                    a2(a3)
-                    a2 = w8
-                    a2 = (a2 - 1)
+                    n2 = w110
+                    v1 = (n1 + 1)
+                    n2(v1)
+                    n2 = w8
+                    n2 = (n2 - 1)
                     do -- (terminates control flow)
-                        do return a2 end
+                        do return n2 end
                     end
-                    a2 = a2(a3, a4)
-                    if not (a2) then
-                        w93 = a2
-                        a2 = w93
-                        a2 = (77149 * a2)
+                    n2 = n2(v1, fn1)
+                    if not (n2) then
+                        w93 = n2
+                        n2 = w93
+                        n2 = (77149 * n2)
                     end
-                    a3 = function(a1, a2, a3, a4, ...) -- F228
-                        local L212, L250
-                        a1 = w93
-                        a1 = (488551 * a1)
-                        a1 = (a1 + 11463257)
-                        a1 = (a1 % 16777216)
-                        w93 = a1
-                        a1 = w93
-                        a1 = (218691 * a1)
-                        a1 = (a1 + 2359832)
-                        a1 = (a1 % 16777216)
-                        w93 = a1
-                        a1 = w93
-                        a1 = (21605 * a1)
-                        a1 = (a1 + 1243276)
-                        a1 = (a1 % 16777216)
-                        w93 = a1
-                        a1 = w93
-                        a1 = (339477 * a1)
-                        a1 = (a1 + 7553257)
-                        a1 = (a1 % 16777216)
-                        w93 = a1
-                        a1 = w93
-                        a1 = (636249 * a1)
-                        a1 = (a1 + 9752435)
-                        a1 = (a1 % 16777216)
-                        w93 = a1
-                        a1 = w93
-                        a1 = (891329 * a1)
-                        a1 = (a1 + 16497462)
-                        a1 = (a1 % 16777216)
-                        w93 = a1
-                        a1 = w93
-                        a1 = (753455 * a1)
-                        a1 = (a1 + 3820704)
-                        a1 = (a1 % 16777216)
-                        w93 = a1
+                    v1 = function(n1, a2, a3, a4, ...) -- F228
+                        local n212, v2
+                        n1 = w93
+                        n1 = (488551 * n1)
+                        n1 = (n1 + 11463257)
+                        n1 = (n1 % 16777216)
+                        w93 = n1
+                        n1 = w93
+                        n1 = (218691 * n1)
+                        n1 = (n1 + 2359832)
+                        n1 = (n1 % 16777216)
+                        w93 = n1
+                        n1 = w93
+                        n1 = (21605 * n1)
+                        n1 = (n1 + 1243276)
+                        n1 = (n1 % 16777216)
+                        w93 = n1
+                        n1 = w93
+                        n1 = (339477 * n1)
+                        n1 = (n1 + 7553257)
+                        n1 = (n1 % 16777216)
+                        w93 = n1
+                        n1 = w93
+                        n1 = (636249 * n1)
+                        n1 = (n1 + 9752435)
+                        n1 = (n1 % 16777216)
+                        w93 = n1
+                        n1 = w93
+                        n1 = (891329 * n1)
+                        n1 = (n1 + 16497462)
+                        n1 = (n1 % 16777216)
+                        w93 = n1
+                        n1 = w93
+                        n1 = (753455 * n1)
+                        n1 = (n1 + 3820704)
+                        n1 = (n1 % 16777216)
+                        w93 = n1
                     end
-                    a4 = a3
-                    a4()
-                    a2 = w15
-                    a3 = w108
-                    a4 = function(a1, a2, a3, a4, ...) -- F218
-                        local L102, L360, L362
-                        a1 = w93
-                        a1 = (43789 * a1)
-                        a1 = (a1 + 6517415)
-                        a1 = (a1 % 16777216)
-                        w93 = a1
-                        a1 = w93
-                        a1 = (327245 * a1)
-                        a1 = (a1 + 8953997)
-                        a1 = (a1 % 16777216)
-                        w93 = a1
+                    fn1 = v1
+                    fn1()
+                    n2 = w15
+                    v1 = w108
+                    fn1 = function(n1, a2, a3, a4, ...) -- F218
+                        local v1, v2, v3
+                        n1 = w93
+                        n1 = (43789 * n1)
+                        n1 = (n1 + 6517415)
+                        n1 = (n1 % 16777216)
+                        w93 = n1
+                        n1 = w93
+                        n1 = (327245 * n1)
+                        n1 = (n1 + 8953997)
+                        n1 = (n1 % 16777216)
+                        w93 = n1
                         do return  end
                     end
                 end
-                w10 = 111
+                state = 111
             else
                 w110 = w97
-                w111 = a99
+                w111 = v81
                 w112 = w1[5]
-                a113 = true
-                w110(w111, w112, a113, a114)
+                v89 = true
+                w110(w111, w112, v89, fn6)
                 w110 = function(a1, ...) -- F191
                     do return  end
                 end
                 w108 = w110
-                w10 = 116
-                a123 = w97
-                w124 = w24
+                state = 116
+                v95 = w97
+                w124 = v16
                 w125 = "new"
-                a123(w124, w125)
-                a122 = 37
+                v95(w124, w125)
+                v94 = 37
             end
         end
     end
     w125 = w112
-    a126 = "IsStudio"
-    a126 = a119[a126]
-    w125(a126)
-    a129 = a123; a128 = a123["GetTangentOnCurve"]
-    a130 = 0.375
-    a128 = a128(a129, a130)
-    a127 = a128
-    a128 = "X"
-    a128 = a127[a128]
-    a128 = (a128 * 100)
-    a128 = (a128 // 1)
-    w101[87] = a70
-    a128 = w1[5]
-    a129 = 20
-    a130 = 176
-    a131 = 46
-    a119 = w1[5]
+    b2 = "IsStudio"
+    b2 = v92[b2]
+    w125(b2)
+    v97 = v95; b4 = v95["GetTangentOnCurve"]
+    b5 = 0.375
+    b4 = b4(v97, b5)
+    b3 = b4
+    b4 = "X"
+    b4 = b3[b4]
+    b4 = (b4 * 100)
+    b4 = (b4 // 1)
+    w101[87] = v57
+    b4 = w1[5]
+    v97 = 20
+    b5 = 176
+    v98 = 46
+    v92 = w1[5]
     w120 = w1[5]
     w121 = w1[5]
-    a122 = w1[5]
-    a123 = w1[5]
+    v94 = w1[5]
+    v95 = w1[5]
     w124 = w1[5]
     w125 = 7
     w125 = 58
-    a126 = w45
-    a127 = L4
-    a126, a127, a128 = a126(a127, a128)
-    a119 = a126
-    w120 = a127
-    a126 = w45
-    a127 = L5
-    a126, a127, a128 = a126(a127, a128)
-    w121 = a126
-    a122 = a127
-        -- (constant test eliminated: if (w10 >= 100) then)
-    a123 = "string"
-    if not ((a122 == a123)) then
-        a122 = w55
-        a122()
+    b2 = w45
+    b3 = L4
+    b2, b3, b4 = b2(b3, b4)
+    v92 = b2
+    w120 = b3
+    b2 = w45
+    b3 = L5
+    b2, b3, b4 = b2(b3, b4)
+    w121 = b2
+    v94 = b3
+        -- (constant test eliminated: if (state >= 100) then)
+    v95 = "string"
+    if not ((v94 == v95)) then
+        v94 = w55
+        v94()
     end
-    w10 = 92
-    w125 = a113; w124 = a113["GetService"]
-    a126 = "HttpService"
-    w124 = w124(w125, a126)
-    a119 = w124
+    state = 92
+    w125 = v89; w124 = v89["GetService"]
+    b2 = "HttpService"
+    w124 = w124(w125, b2)
+    v92 = w124
     w124 = w118
-    w125 = a119
-    a126 = "HttpService"
-    w124(w125, a126)
-    if (a122 ~= 123) then
+    w125 = v92
+    b2 = "HttpService"
+    w124(w125, b2)
+    if (v94 ~= 123) then
     end
     w118 = "new"
-    a117 = w25[w118]
+    v91 = v17[w118]
     w118 = w112
-    a119 = a35
-    w118(a119)
-    w10 = 40
-    a130 = a123; a129 = a123["GetPositionOnCurveArcLength"]
-    a131 = 0.6666666865348816
-    a129 = a129(a130, a131)
-    a122 = 12
-    w121 = a119[57]
+    v92 = v23
+    w118(v92)
+    state = 40
+    b5 = v95; v97 = v95["GetPositionOnCurveArcLength"]
+    v98 = 0.6666666865348816
+    v97 = v97(b5, v98)
+    v94 = 12
+    w121 = v92[57]
     w101[55] = w65
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[57]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[57]
     w124 = 2
-    w121(a122, a123, w124, w125)
-    w121 = a119[56]
-    w101[56] = a68
+    w121(v94, v95, w124, w125)
+    w121 = v92[56]
+    w101[56] = v55
     w121 = w84
-    a122 = a119[56]
-    a123 = L7
-    a123 = a123()
+    v94 = v92[56]
+    v95 = L7
+    v95 = v95()
     w124 = 2
-    w121(a122, a123, w124, w125)
-    w121 = a119[43]
+    w121(v94, v95, w124, w125)
+    w121 = v92[43]
     w101[57] = w79
     w120 = 70
         -- (constant test eliminated: if not ((39 >= w120)) then)
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[45]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[45]
     w124 = 2
-    w121(a122, a123, w124, w125)
-    w121 = a119[28]
-    w101[60] = a117
+    w121(v94, v95, w124, w125)
+    w121 = v92[28]
+    w101[60] = v91
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[28]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[28]
     w124 = 1
-    w121(a122, a123, w124, w125)
-    w121 = a119[63]
+    w121(v94, v95, w124, w125)
+    w121 = v92[63]
     w101[61] = w46
     w121 = w84
-    a122 = a119[63]
-    a123 = L7
-    a123 = a123()
+    v94 = v92[63]
+    v95 = L7
+    v95 = v95()
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w120 = 56
-    w121 = a119[6]
-    w101[62] = a113
+    w121 = v92[6]
+    w101[62] = v89
     w120 = 55
     w125 = w84
-    a126 = L7
-    a126 = a126()
-    a127 = a119[22]
-    a128 = 1
-    w125(a126, a127, a128, a129)
+    b2 = L7
+    b2 = b2()
+    b3 = v92[22]
+    b4 = 1
+    w125(b2, b3, b4, v97)
     w124 = 117
     w125 = w84
-    a126 = "The metatable is locked"
-    a127 = w48
-    a128 = a123
-    a127 = a127(a128)
-    a128 = true
-    w125(a126, a127, a128, a129)
-    w125(a126, a127, a128, a129)
-    w125 = a119[35]
+    b2 = "The metatable is locked"
+    b3 = w48
+    b4 = v95
+    b3 = b3(b4)
+    b4 = true
+    w125(b2, b3, b4, v97)
+    w125(b2, b3, b4, v97)
+    w125 = v92[35]
     w101[80] = w78
     w125 = w83
-    a126 = L7
-    a126 = a126()
-    a127 = a119[35]
-    a128 = 1
-    w125(a126, a127, a128, a129)
+    b2 = L7
+    b2 = b2()
+    b3 = v92[35]
+    b4 = 1
+    w125(b2, b3, b4, v97)
     w121 = w1[5]
-    a128 = a133
-    a129 = a126
-    a130 = w124
-    a129 = a129(a130)
-    a130 = w83
-    a131 = a127
-    a132 = a128
-    a133 = true
-    a130(a131, a132, a133, a134)
-    a130 = w84
-    a131 = a128
-    a127 = a127()
-    a128 = 1
-    w125(a126, a127, a128, a129)
+    b4 = v100
+    v97 = b2
+    b5 = w124
+    v97 = v97(b5)
+    b5 = w83
+    v98 = b3
+    v99 = b4
+    v100 = true
+    b5(v98, v99, v100, b6)
+    b5 = w84
+    v98 = b4
+    b3 = b3()
+    b4 = 1
+    w125(b2, b3, b4, v97)
     w125 = w118[2]
     w101[9] = w125
     w107 = w97
-    w108 = w30
-    a109 = "cancel"
-    w107(w108, a109)
-    w10 = 104
-    w10 = 13
-    a133 = a131[a133]
-    a134 = true
-    a132(a133, a134)
-    a122 = a122()
-    a123 = a119[9]
+    w108 = v20
+    v86 = "cancel"
+    w107(w108, v86)
+    state = 104
+    state = 13
+    v100 = v98[v100]
+    b6 = true
+    v99(v100, b6)
+    v94 = v94()
+    v95 = v92[9]
     w124 = 2
-    w121(a122, a123, w124, w125)
-    w121 = a119[8]
+    w121(v94, v95, w124, w125)
+    w121 = v92[8]
     w101[71] = w71
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[8]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[8]
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w121 = 125
-    a122 = 224
-    a123 = 33
+    v94 = 224
+    v95 = 33
         -- (constant test eliminated: if (16 >= w124) then)
     w121 = 72
-    a122 = 173
-    a123 = 25
+    v94 = 173
+    v95 = 25
     while true do
-        a128 = "Clone"
-        a128 = w121[a128]
-        a129 = "Clone"
-        a127(a128, a129)
+        b4 = "Clone"
+        b4 = w121[b4]
+        v97 = "Clone"
+        b3(b4, v97)
     end
     w116 = w112
-    a117 = a67
-    w116(a117)
+    v91 = v54
+    w116(v91)
     w116 = w112
-    a117 = w29
-    w116(a117)
+    v91 = v19
+    w116(v91)
     w116 = {}
     w116[4] = 3
     w116[5] = 1
     w116[10] = 6
-    w10 = 72
-    a117 = w112
-    w118 = a38
-    a117(w118)
-    a117 = w112
-    w118 = a41
-    a117(w118)
-    a117 = nil
-    w10 = 45
+    state = 72
+    v91 = w112
+    w118 = v26
+    v91(w118)
+    v91 = w112
+    w118 = v29
+    v91(w118)
+    v91 = nil
+    state = 45
     w120 = 102
-    w121 = a119[58]
+    w121 = v92[58]
     w101[50] = w77
     w120 = 99
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[3]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[3]
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     while true do
-        a128 = true
-        a126(a127, a128)
-        a122 = 49
+        b4 = true
+        b2(b3, b4)
+        v94 = 49
     end
-    a122 = w45
-    a123 = w2
+    v94 = w45
+    v95 = v2
     w124 = false
-    a122, a123, w124 = a122(a123, w124, w125)
-    a119 = a122
-    w120 = a123
+    v94, v95, w124 = v94(v95, w124, w125)
+    v92 = v94
+    w120 = v95
     w121 = 61
         -- (constant test eliminated: if not ((w121 >= 86)) then)
-        if a119 then
+        if v92 then
         end
-    a127 = a127[a128]
-    w111 = a41
-    w112 = a47
-    a113 = 299
-    a114 = w55
-    w112 = w112(a113, a114)
+    b3 = b3[b4]
+    w111 = v29
+    w112 = v35
+    v89 = 299
+    fn6 = w55
+    w112 = w112(v89, fn6)
     w111(w112)
     w111 = w1[5]
     w112 = nil
-    w10 = 52
-    a104 = w97
-    a105 = a31
-    a106 = "unpack"
-    a104(a105, a106)
-    w10 = 24
-    w10 = 58
-    a126 = a126(a127, a128)
-    a127 = w1[5]
-    a122 = 61
+    state = 52
+    fn4 = w97
+    v82 = v21
+    v83 = "unpack"
+    fn4(v82, v83)
+    state = 24
+    state = 58
+    b2 = b2(b3, b4)
+    b3 = w1[5]
+    v94 = 61
     w118 = w112
-    a119 = a44
-    w118(a119)
+    v92 = v32
+    w118(v92)
     w118 = w112
-    a119 = a47
-    w118(a119)
-    w10 = 108
+    v92 = v35
+    w118(v92)
+    state = 108
     w118 = w112
-    a119 = a43
-    w118(a119)
-    w10 = 1
-    a57 = "readu32"
-    w54 = w20[a57]
-    w10 = 117
-    w55 = function(t1, t2, t3, t4, ...) -- F376
-        local L0, L5
-        t1 = w1[5]
-        t3 = nil
-        L7 = t1
-        v8 = t3
-        v9 = t3
-        L10 = t3
-        L11 = t3
-        v3 = t3
-        t1 = function(r1, r2, a3, r4, r5, r6, r7, r8, a9, r10, a11, ...) -- F382
-            local r311
-            r1 = ENV.string
-            r1 = r1[0]
-            r2 = ENV.string
-            r2 = r2[0]
-            r4 = r2
-            r5 = " "
-            r6 = 8
-            r4 = r4(r5, r6)
-            r5 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, ...) -- F388
-                a3 = 1
-                a4 = 0
-                if (a1 >= a2) then
-                    a5 = (a1 % 2)
-                    a4 = (a4 + a3)
-                    a6 = (a1 - a5)
-                    a1 = (a6 / 2)
-                    a3 = (a3 * 2)
+    v92 = v31
+    w118(v92)
+    state = 1
+    v44 = "readu32"
+    w54 = t7[v44]
+    state = 117
+    w55 = function(fn1, i1, v1, i2, ...) -- F376
+        local t1, v2
+        fn1 = w1[5]
+        L7 = fn1
+        v8 = v1
+        v9 = v1
+        L10 = v1
+        L11 = v1
+        v3 = v1
+        fn1 = function(t1, v2, a3, t4, t5, t6, t7, t8, k1, fn2, a11, ...) -- F382
+            local v7
+            t1 = ENV.string
+            t1 = t1[0]
+            v2 = ENV.string
+            v2 = v2[0]
+            t4 = v2
+            t5 = " "
+            t6 = 8
+            t4 = t4(t5, t6)
+            t5 = function(n1, n2, n3, v1, n4, n5, v2, a8, a9, ...) -- F388
+                n3 = 1
+                if (n1 >= n2) then
+                    n4 = (n1 % 2)
+                    v1 = (v1 + n3)
+                    n5 = (n1 - n4)
+                    n1 = (n5 / 2)
+                    n3 = (n3 * 2)
                 end
-                a1 = a2
-                a7 = (a1 - a5)
-                a1 = (nil / 2)
-                a7 = (a2 - a6)
-                a2 = (a7 / 2)
-                a3 = (a3 * 2)
+                n1 = n2
+                v2 = (n1 - n4)
+                n1 = (nil / 2)
+                v2 = (n2 - n5)
+                n2 = (v2 / 2)
+                n3 = (n3 * 2)
                 do -- (terminates control flow)
-                    a5 = a4
-                    do return a5 end
+                    n4 = v1
+                    do return n4 end
                 end
-                a4 = (a4 + a3)
-                a5 = (a1 % 2)
-                a6 = (a2 % 2)
+                v1 = (v1 + n3)
+                n4 = (n1 % 2)
+                n5 = (n2 % 2)
             end
-            r6 = function(a1, a2, a3, a4, a5, a6, a7, a8, ...) -- F398
-                local L162
-                if (not a3) then
-                    a4 = (a2 - 1)
-                    a4 = (2 ^ a4)
-                    a5 = (a4 + a4)
-                    a5 = (a1 % a5)
-                    a5 = (a5 >= a4)
-                    if not ((not a5)) then
-                        a5 = 1
+            t6 = function(n1, n2, n3, n4, n5, v1, a7, a8, ...) -- F398
+                local v2
+                if (not n3) then
+                    n4 = (n2 - 1)
+                    n4 = (2 ^ n4)
+                    n5 = (n4 + n4)
+                    n5 = (n1 % n5)
+                    n5 = (n5 >= n4)
+                    if not ((not n5)) then
+                        n5 = 1
                     end
                 end
-                a4 = (a2 - 1)
-                a4 = (2 ^ a4)
-                a4 = (a1 / a4)
-                a5 = (a3 - 1)
-                a6 = (a2 - 1)
-                a5 = (a5 - a6)
-                a5 = (a5 + 1)
-                a5 = (2 ^ a5)
-                a4 = (a4 % a5)
-                a5 = (a4 % 1)
-                a5 = (a4 - a5)
-                do return a5 end
-                a5 = 0
+                n4 = (n2 - 1)
+                n4 = (2 ^ n4)
+                n4 = (n1 / n4)
+                n5 = (n3 - 1)
+                v1 = (n2 - 1)
+                n5 = (n5 - v1)
+                n5 = (n5 + 1)
+                n5 = (2 ^ n5)
+                n4 = (n4 % n5)
+                n5 = (n4 % 1)
+                n5 = (n4 - n5)
+                do return n5 end
+                n5 = 0
                 repeat
-                until not (a5)
+                until not (n5)
             end
-            r7 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, ...) -- F408
-                local L68, L69, L70, L71, L72, L73, L74, L75, L76, L77, L78, L79, L80, L81, L82, L83, L84, L85, L86, L87, L88, L89, L90, L91, L92, L93, L94, L95, L96, L97, L98, L99, L100, L101, L102, L103, L104, L105, L106, L107, L108, L109, L110, L111, L112, L113, L114, L115, L116, L117, L118, L119, L120, L121, L122, L123, L124, L125, L126, L127, L128, L129, L130, L131, L132, L133, L134, L135, L136, L137, L138, L139, L140, L141, L142, L143, L144, L145, L146, L147, L148, L149, L150, L151, L152, L153, L154, L155, L156, L157, L158, L159, L160, L161, L162, L163, L164, L165, L166, L167, L168, L169, L170, L171, L172, L173, L174, L175, L176, L177, L178, L179, L180, L181, L182, L183, L184, L185, L186, L187, L188, L189, L190, L191, L192, L193, L194, L195, L196, L197, L198, L199, L200, L201, L202, L203, L204, L205, L206, L207, L208, L209, L210, L211, L212, L213, L214, L215, L216, L217, L218, L219, L220, L221, L222, L223, L224, L225, L226, L227, L228, L229, L230, L231, L232, L233, L234, L235, L236, L237, L238, L239, L240, L241, L242, L243, L244, L245, L246, L247, L248, L249, L250, L251, L252, L253, L254, L255, L256, L257, L258, L259, L260, L261, L262, L263, L264, L265, L266, L267, L268, L269, L270, L271, L272, L273, L274, L275, L276, L277, L278, L279, L280, L281, L282, L283, L284, L285, L286, L287, L288, L289, L290, L291, L292, L293, L294, L295, L296, L297, L298, L299, L300, L301, L302, L303, L304, L305, L306, L307, L308, L309, L310, L311, L312, L313, L314, L315, L316, L317, L318, L319, L320, L321, L322, L323, L324, L325, L326, L327, L328, L329, L330, L331, L332, L333, L334, L335, L336, L337
-                a1 = r1
-                a2 = UPVALS[a1]
-                a3 = 1
-                a4 = 4
-                a1, a2, a3, a4, a5 = a1(a2, a3, a4, a5)
-                a5 = r5
-                a6 = a4
-                a7 = 64
-                a5 = a5(a6, a7)
-                a5 = (a5 * 16777216)
-                a6 = r5
-                a7 = a3
-                a8 = 32
-                a6 = a6(a7, a8)
-                a6 = (a6 * 65536)
-                a5 = (a5 + a6)
-                a6 = r5
-                a7 = a2
-                a8 = 16
-                a6 = a6(a7, a8)
-                a6 = (a6 * 256)
-                a5 = (a5 + a6)
-                a6 = r5
-                a7 = a1
-                a8 = 8
-                a6 = a6(a7, a8)
-                a5 = (a5 + a6)
-                do return a5 end
+            t7 = function(fn1, v1, v2, v3, v4, fn2, v5, v6, a9, ...) -- F408
+                local fn3, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40, v41, v42, v43, v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63, v64, v65, v66, v67, v68, v69, v70, v71, v72, v73, v74, v75, v76, v77, v78, v79, v80, v81, v82, v83, v84, v85, v86, v87, v88, v89, v90, v91, v92, v93, v94, v95, v96, v97, v98, v99, v100, v101, v102, v103, v104, v105, v106, v107, v108, v109, v110, v111, v112, v113, v114, v115, v116, v117, v118, v119, v120, v121, v122, v123, v124, v125, v126, v127, v128, v129, v130, v131, v132, v133, v134, v135, v136, v137, v138, v139, v140, v141, v142, v143, v144, v145, v146, v147, v148, v149, v150, v151, v152, v153, v154, v155, v156, v157, v158, v159, v160, v161, v162, v163, v164, v165, v166, v167, v168, v169, v170, v171, v172, v173, v174, v175, v176, v177, v178, v179, v180, v181, v182, v183, v184, v185, v186, v187, v188, v189, v190, v191, v192, v193, v194, v195, v196, v197, v198, v199, v200, v201, v202, v203, v204, v205, v206, v207, v208, v209, v210, v211, v212, v213, v214, v215, v216, v217, v218, v219, v220, v221, v222, v223, v224, v225, v226, v227, v228, v229, v230, v231, v232, v233, v234, v235, v236, v237, v238, v239, v240, v241, v242, v243, v244, v245, v246, v247, v248, v249, v250, v251, v252, v253, v254, v255, v256, v257, v258, v259, v260, v261, v262, v263, v264, v265, v266, v267, v268, v269, v270, v271, v272, v273, v274, v275
+                fn1 = t1
+                v1 = UPVALS[fn1]
+                v2 = 1
+                fn1, v1, v2, v3, v4 = fn1(v1, v2, v3, v4)
+                v4 = t5
+                fn2 = v3
+                v4 = v4(fn2, v5)
+                v4 = (v4 * 16777216)
+                fn2 = t5
+                v5 = v2
+                fn2 = fn2(v5, v6)
+                fn2 = (fn2 * 65536)
+                v4 = (v4 + fn2)
+                fn2 = t5
+                v5 = v1
+                fn2 = fn2(v5, v6)
+                fn2 = (fn2 * 256)
+                v4 = (v4 + fn2)
+                fn2 = t5
+                v5 = fn1
+                fn2 = fn2(v5, v6)
+                v4 = (v4 + fn2)
+                do return v4 end
             end
-            r8 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, ...) -- F420
-                local L101
-                a1 = r7
+            t8 = function(k1, fn1, v1, n1, v2, v3, v4, n2, a9, a10, ...) -- F420
+                local v5
+                k1 = t7
                 -- (junk op: register-file store with a decoded-at-runtime index)
-                a2 = r7
-                a2 = a2()
-                a3 = 1
-                a4 = UPVALS[a1]
-                a5 = a2
-                a6 = 1
-                a7 = 20
-                a4 = a4(a5, a6, a7)
-                a4 = (a4 * 4294967296)
-                a4 = (a4 + a1)
-                a5 = r6
-                a6 = a2
-                a7 = 21
-                a8 = 31
-                a5 = a5(a6, a7, a8)
-                a6 = r6
-                a7 = a2
-                a8 = 32
-                a6 = a6(a7, a8)
-                a6 = (1 ^ a6)
-                a6 = (-a6)
+                fn1 = t7
+                fn1 = fn1()
+                n1 = UPVALS[k1]
+                v2 = fn1
+                v4 = 20
+                n1 = n1(v2, v3, v4)
+                n1 = (n1 * 4294967296)
+                n1 = (n1 + k1)
+                v2 = t6
+                v3 = fn1
+                v4 = 21
+                n2 = 31
+                v2 = v2(v3, v4, n2)
+                v3 = t6
+                v4 = fn1
+                n2 = 32
+                v3 = v3(v4, n2)
+                v3 = (1 ^ v3)
+                v3 = (-v3)
                 do -- (terminates control flow)
                     repeat
-                    until not (a7)
-                    a7 = (a6 * 0)
-                    a7 = (a7 / 0)
-                    a7 = (a5 - 1023)
-                    a7 = (2 ^ a7)
-                    a7 = (a6 * a7)
-                    a8 = (a4 / 4503599627370496)
-                    a8 = (a3 + a8)
-                    a7 = (a7 * a8)
-                    do return a7 end
+                    until not (v4)
+                    v4 = (v3 * 0)
+                    v4 = (v4 / 0)
+                    v4 = (v2 - 1023)
+                    v4 = (2 ^ v4)
+                    v4 = (v3 * v4)
+                    n2 = (n1 / 4503599627370496)
+                    n2 = (v1 + n2)
+                    v4 = (v4 * n2)
+                    do return v4 end
                 end
-                if not ((a4 ~= 0)) then
-                    a7 = (a6 * 0)
-                    do return a7 end
+                if not ((n1 ~= 0)) then
+                    v4 = (v3 * 0)
+                    do return v4 end
                 end
-                a5 = 1
-                a3 = 0
-                a7 = (a4 == 0)
-                a7 = (a6 * 1)
-                a7 = (a7 / 0)
+                v2 = 1
+                v4 = (n1 == 0)
+                v4 = (v3 * 1)
+                v4 = (v4 / 0)
             end
-            a9 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, ...) -- F432
-                a1 = 1
-                a2 = r7
-                a2 = a2()
-                a3 = 1
-                a15 = r8
+            k1 = function(v1, fn1, fn2, a4, t1, i1, i2, i3, a9, fn3, fn4, fn5, fn6, fn7, fn8, fn9, fn10, a18, ...) -- F432
+                fn1 = t7
+                fn1 = fn1()
+                fn2 = 1
+                fn8 = t8
                 -- (junk op: register-file store with a decoded-at-runtime index)
-                a15 = a5[a15]
-                a15 = r5
-                a16 = r8
-                a16 = a16()
-                a17 = r8
-                a15 = a15(a16, a17(a18))
-                a5[a14] = a15
-                a14 = r7
-                a14 = a14()
-                a15 = r8
-                a15 = a15()
-                if (not a15) then
-                    a5[a14] = a15
-                    a14 = r6
-                    a15 = r8
-                    a15 = a15()
-                    a16 = r7
-                    a14 = a14(a15, a16(a17))
-                    a15 = {} -- size 1
-                    a16 = r8
-                    a16 = a16()
-                    a17 = r7
-                    a17(a18)
+                fn8 = t1[fn8]
+                fn8 = t5
+                fn9 = t8
+                fn9 = fn9()
+                fn10 = t8
+                fn8 = fn8(fn9, fn10(a18))
+                t1[fn7] = fn8
+                fn7 = t7
+                fn7 = fn7()
+                fn8 = t8
+                fn8 = fn8()
+                if (not fn8) then
+                    t1[fn7] = fn8
+                    fn7 = t6
+                    fn8 = t8
+                    fn8 = fn8()
+                    fn9 = t7
+                    fn7 = fn7(fn8, fn9(fn10))
+                    fn8 = {} -- size 1
+                    fn9 = t8
+                    fn9 = fn9()
+                    fn10 = t7
+                    fn10(a18)
                     -- table.move range
-                    a5[a14] = a15
+                    t1[fn7] = fn8
                 end
-                a15 = UPVALS[a2]
-                a15 = a15()
+                fn8 = UPVALS[fn1]
+                fn8 = fn8()
                 do -- (terminates control flow)
-                    a1 = r5
-                    a2 = r8
-                    a2 = a2()
-                    a3 = r7
-                    a3(a4)
-                    do return a1(...--[[registers a2..top of stack]]) end
+                    v1 = t5
+                    fn1 = t8
+                    fn1 = fn1()
+                    fn2 = t7
+                    fn2(a4)
+                    do return v1(...--[[registers fn1..top of stack]]) end
                 end
-                a10 = 0
-                a11 = 255
-                a12 = 1
+                fn3 = 0
+                fn4 = 255
+                fn5 = 1
                 while true do
-                    a5 = {}
-                    a6 = 0
-                    a7 = 255
-                    a8 = 1
+                    t1 = {}
+                    i1 = 0
+                    i2 = 255
+                    i3 = 1
                 end
                 while true do
-                    a11 = a11(a12, a13(a14))
-                    a5[a10] = a11
-                    a10 = r5
-                    a11 = r7
-                    a11 = a11()
-                    a12 = r7
-                    a10 = a10(a11, a12(a13))
-                    a11 = UPVALS[a1]
-                    a12 = r7
-                    a12 = a12()
-                    a13 = r7
-                    a11 = a11(a12, a13(a14))
-                    a5[a10] = a11
+                    fn4 = fn4(fn5, fn6(fn7))
+                    t1[fn3] = fn4
+                    fn3 = t5
+                    fn4 = t7
+                    fn4 = fn4()
+                    fn5 = t7
+                    fn3 = fn3(fn4, fn5(fn6))
+                    fn4 = UPVALS[v1]
+                    fn5 = t7
+                    fn5 = fn5()
+                    fn6 = t7
+                    fn4 = fn4(fn5, fn6(fn7))
+                    t1[fn3] = fn4
                 end
-                a6 = 1
-                a7 = r7
-                a7 = a7()
-                a8 = 1
-                a10 = r5
-                a11 = r7
-                a11 = a11()
-                a12 = r7
-                a10 = a10(a11, a12(a13))
-                a11 = r5
-                a14 = r7
-                a14 = a14()
-                a14 = r8
-                a14 = a14()
+                i1 = 1
+                i2 = t7
+                i2 = i2()
+                i3 = 1
+                fn3 = t5
+                fn4 = t7
+                fn4 = fn4()
+                fn5 = t7
+                fn3 = fn3(fn4, fn5(fn6))
+                fn4 = t5
+                fn7 = t7
+                fn7 = fn7()
+                fn7 = t8
+                fn7 = fn7()
                 while true do
-                    a12 = a12()
-                    a13 = r7
+                    fn5 = fn5()
+                    fn6 = t7
                 end
-                a12 = r7
+                fn5 = t7
             end
-            r10 = a9
-            r10 = r10()
-            if not ((not r10)) then
-                r10 = a9
-                r10()
+            fn2 = k1
+            fn2 = fn2()
+            if not ((not fn2)) then
+                fn2 = k1
+                fn2()
             end
             do return  end
         end
-        t1()
-        L0, t1, t2, t3, t4 = nil
+        fn1()
+        t1, fn1, i1, v1, i2 = nil
         -- opaque op 125 (instr 10)
-        t1 = 2
-        L0 = L0[t1]
-        t1 = {}
-        t2 = 1
-        t3 = (#L0)
-        t4 = 1
-        while true do -- (empty spin loop: unrestructured dispatcher exit)
-        end
-        L0[L5] = t1
+        t1 = t1[fn1]
+        fn1 = {}
+        i1 = 1
+        v1 = (#t1)
+        i2 = 1
+        -- (empty spin loop: dispatcher exit the structurer could not
+        --  recover; commented out -- it can never terminate on its own)
+        -- while true do
+        -- end
+        t1[v2] = fn1
     end
-    w10 = 80
+    state = 80
     w121 = w84
-    a122 = L7
-    a122 = a122()
-    a123 = a119[14]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[14]
     w124 = 2
-    w121(a122, a123, w124, w125)
-    w121 = a119[9]
-    w101[70] = a127
+    w121(v94, v95, w124, w125)
+    w121 = v92[9]
+    w101[70] = b3
     w121 = w84
-    a122 = L7
-    w125(a126, a127, a128, a129)
+    v94 = L7
+    w125(b2, b3, b4, v97)
     w121 = w1[5]
-    a122 = w1[5]
-    a123 = w1[5]
+    v94 = w1[5]
+    v95 = w1[5]
     w124 = 71
-    if not ((a117 >= 188)) then
-        if not ((36 >= a117)) then
-            w118 = a56
-            a119 = function(a1, a2, a3, ...) -- F114
-                a1 = w39
-                a2 = 1468268675
-                a1(a2)
-                a1 = w39
-                a2 = w112
-                a1(a2)
+    if not ((v91 >= 188)) then
+        if not ((36 >= v91)) then
+            w118 = v43
+            v92 = function(fn1, v1, a3, ...) -- F114
+                fn1 = w39
+                fn1(v1)
+                fn1 = w39
+                v1 = w112
+                fn1(v1)
                 do return  end
             end
-            w118 = w118(a119)
-            a113 = w118
+            w118 = w118(v92)
+            v89 = w118
         end
     end
     w118 = w83
-    a119 = a113
-    a119 = a119()
+    v92 = v89
+    v92 = v92()
     w120 = 1468268675
     w121 = true
-    w118(a119, w120, w121, a122)
+    w118(v92, w120, w121, v94)
     w118 = w83
-    a119 = a113
-    a119 = a119()
+    v92 = v89
+    v92 = v92()
     w120 = w112
     w121 = true
-    w118(a119, w120, w121, a122)
-    w10 = 7
-    a68 = a34
-    a69 = 2048
-    a68 = a68(a69)
-    w66 = a68
-    w10 = 31
-        -- (constant test eliminated: if (41 >= w10) then)
-        if (114 >= w10) then
-                -- (constant test eliminated: if not ((w10 >= 41)) then)
+    w118(v92, w120, w121, v94)
+    state = 7
+    v55 = k5
+    v56 = 2048
+    v55 = v55(v56)
+    w66 = v55
+    state = 31
+        -- (constant test eliminated: if (41 >= state) then)
+        if (114 >= state) then
+                -- (constant test eliminated: if not ((state >= 41)) then)
                 w36 = w1[37]
-                w10 = 114
+                state = 114
         else
             w40 = w1[36]
         end
     w125 = w83
-    a126 = L7
-    a126 = a126()
-    a127 = a119[37]
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    w118 = a91
-    a119 = w19
+    b2 = L7
+    b2 = b2()
+    b3 = v92[37]
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    w118 = v75
+    v92 = mathLib
     w120 = {}
     w120[2728713478] = 1541303681
     w120[901450932] = 1153969210
     w120[889552922] = 784453481
-    w118(a119, w120)
-    w10 = 57
-    w118 = a91
-    a119 = a49
+    w118(v92, w120)
+    state = 57
+    w118 = v75
+    v92 = v37
     w120 = {}
     w120[410403160] = 452019009
     w120[749373828] = 168960940
     w120[2260094527] = 595074863
     w120[1939539207] = 1070924627
     w120[2267345195] = 659079966
-    w118(a119, w120)
-    w118 = a91
-    a119 = w4
+    w118(v92, w120)
+    w118 = v75
+    v92 = taskLib
     w120 = {}
-        -- (constant test eliminated: if not ((w10 >= 119)) then)
-        a102 = w97
-        a103 = w60
-        a104 = "setfenv"
-        a102(a103, a104)
-        w10 = 65
+        -- (constant test eliminated: if not ((state >= 119)) then)
+        fn2 = w97
+        fn3 = w60
+        fn4 = "setfenv"
+        fn2(fn3, fn4)
+        state = 65
     w120 = 13
     w121 = w84
-    a122 = a119[58]
-    a123 = L7
-    a123 = a123()
+    v94 = v92[58]
+    v95 = L7
+    v95 = v95()
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     if (31 >= w120) then
         w120 = 114
         w121 = w84
-        a122 = L7
-        a122 = a122()
-        a123 = a119[11]
+        v94 = L7
+        v94 = v94()
+        v95 = v92[11]
         w124 = 1
-        w121(a122, a123, w124, w125)
+        w121(v94, v95, w124, w125)
     else
         w120 = 116
         w121 = w84
-        a122 = L7
-        a122 = a122()
-        a123 = a119[34]
+        v94 = L7
+        v94 = v94()
+        v95 = v92[34]
         w124 = 2
-        w121(a122, a123, w124, w125)
+        w121(v94, v95, w124, w125)
     end
-    while true do -- (empty spin loop: unrestructured dispatcher exit)
-    end
+    -- (empty spin loop: dispatcher exit the structurer could not
+    --  recover; commented out -- it can never terminate on its own)
+    -- while true do
+    -- end
         -- (constant test eliminated: if (w120 > 47) then)
-        w121 = a119[48]
-        w101[48] = w22
+        w121 = v92[48]
+        w101[48] = v14
         w120 = 57
-    w88 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, ...) -- F463
-        local L449
-        a4 = a2
-        a5 = w45
-        a6 = w1[5]
-        a7 = 93
-            -- (constant test eliminated: if not ((93 > a7)) then)
-            a6 = w1[5]
-            a7 = 24
-            a9 = 24
-            a10 = 237
-            a11 = 108
+    w88 = function(v1, v2, a3, k1, k2, k3, v3, fn1, i1, v4, i2, n1, fn2, v5, a15, ...) -- F463
+        local v6
+        k1 = v2
+        k2 = w45
+        k3 = w1[5]
+            -- (constant test eliminated: if not ((93 > v3)) then)
+            k3 = w1[5]
+            i1 = 24
+            v4 = 237
+            i2 = 108
             while true do
-                a9 = a4
-                a6 = w83
+                i1 = k1
+                k3 = w83
             end
-        a8 = a5
-        a9 = a4
-        a10 = ...  -- vararg fill: also writes R11, R12, ... (count is runtime dependent)
-        a8, a9, a10 = a8()
-        a5 = a8
-        a4 = a9
-        a6 = w79
-        a8 = w1[5]
-        a8 = a5
-        L449 = UP120[nil]
-        a8 = a1
-        a10 = a6
-        a11 = a8
-        a12 = a9
-        a10(a11, a12)
-        a13 = a6
-        a14 = a8
-        a13(a14)
-        while true do -- (empty spin loop: unrestructured dispatcher exit)
-        end
+        fn1 = k2
+        i1 = k1
+        v4 = ...  -- vararg fill: also writes R11, R12, ... (count is runtime dependent)
+        fn1, i1, v4 = fn1()
+        k2 = fn1
+        k1 = i1
+        k3 = w79
+        fn1 = w1[5]
+        fn1 = k2
+        v6 = UP120[nil]
+        fn1 = v1
+        v4 = k3
+        i2 = fn1
+        n1 = i1
+        v4(i2, n1)
+        fn2 = k3
+        v5 = fn1
+        fn2(v5)
+        -- (empty spin loop: dispatcher exit the structurer could not
+        --  recover; commented out -- it can never terminate on its own)
+        -- while true do
+        -- end
         do -- (terminates control flow)
             do return  end
         end
     end
-    w10 = 48
-    a129 = "X"
-    a129 = a128[a129]
-    a129 = (a129 * 100)
-    a129 = (a129 // 1)
-    w101[89] = a105
-    a129 = a119
-    a130 = "X"
-    a130 = a128[a130]
-    a131 = true
-    a129(a130, a131)
-    a129 = 6
-    a130 = 231
-    a131 = 117
-    w10 = 54
+    state = 48
+    v97 = "X"
+    v97 = b4[v97]
+    v97 = (v97 * 100)
+    v97 = (v97 // 1)
+    w101[89] = v82
+    v97 = v92
+    b5 = "X"
+    b5 = b4[b5]
+    v98 = true
+    v97(b5, v98)
+    v97 = 6
+    b5 = 231
+    v98 = 117
+    state = 54
     w125 = w84
-    a126 = L7
-    a126 = a126()
-    a127 = a119[18]
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    a126 = "Y"
-    a126 = w125[a126]
-    a126 = a126[0]
-    a126 = (a126 * 100)
-    a126 = (a126 // 1)
-    w101[84] = a126
-    a126 = a119
-    a127 = "Y"
-    a127 = w125[a127]
-    a128 = "Scale"
-    a127 = a127[a128]
-    a128 = true
-    a126(a127, a128)
-    a127 = a123; a126 = a123["GetPositionOnCurve"]
-    a128 = 0.2857142984867096
-    w125 = a119[49]
-    w101[78] = w5
+    b2 = L7
+    b2 = b2()
+    b3 = v92[18]
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    b2 = "Y"
+    b2 = w125[b2]
+    b2 = b2[0]
+    b2 = (b2 * 100)
+    b2 = (b2 // 1)
+    w101[84] = b2
+    b2 = v92
+    b3 = "Y"
+    b3 = w125[b3]
+    b4 = "Scale"
+    b3 = b3[b4]
+    b4 = true
+    b2(b3, b4)
+    b3 = v95; b2 = v95["GetPositionOnCurve"]
+    b4 = 0.2857142984867096
+    w125 = v92[49]
+    w101[78] = stringLib
     w125 = w83
     if (w120 ~= 99) then
     else
         w118 = {}
-        a119 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, ...) -- F30
-            local L0, L332, L467
-            a3 = w1[5]
-            a4 = 4
-            a3 = v9
-            a4 = 19
-            a10 = w1[5]
-            a11 = 40
-            a12 = 246
-            a13 = 107
+        v92 = function(v2, v3, v4, n1, v5, v6, v7, v8, b1, i1, i2, i3, n2, i4, n3, fn1, m17, v10, v11, a20, ...) -- F30
+            local v1, v12, v13
+            v4 = w1[5]
+            n1 = 4
+            v4 = v9
+            n1 = 19
+            i1 = w1[5]
+            i2 = 40
+            i3 = 246
+            n2 = 107
             repeat
-            until not ((a14 >= 147))
-            a6 = w63
-            a6 = w58
-            a5 = (a5 + a6)
-            a8 = 100
+            until not ((i4 >= 147))
+            v6 = w63
+            v6 = w58
+            v5 = (v5 + v6)
             do -- (terminates control flow)
                 do return  end
             end
-            a8 = a8[a9]
-            a10 = a6
-            a11 = a8
-            a10(a11)
-            a6 = UPVALS[a5]
-            a10 = 2
-            a11 = 30
-            a12 = 7
-            a8 = a7
-            a9 = true
+            v8 = v8[b1]
+            i1 = v6
+            i2 = v8
+            i1(i2)
+            v6 = UPVALS[v5]
+            i1 = 2
+            i2 = 30
+            i3 = 7
+            v8 = v7
+            b1 = true
             while true do
-                a6[a8] = a9
-                a10 = 51
-                a11 = 245
-                a12 = 97
+                v6[v8] = b1
+                i1 = 51
+                i2 = 245
+                i3 = 97
             end
-            a8 = a3
-            a4 = 100
-                -- (constant test eliminated: if not ((98 >= a4)) then)
-                a9 = true
-            a8 = w118
-            if (a13 ~= 9) then
-                a8 = a3
+            v8 = v4
+            n1 = 100
+                -- (constant test eliminated: if not ((98 >= n1)) then)
+                b1 = true
+            v8 = w118
+            if (n2 ~= 9) then
+                v8 = v4
             else
-                a9 = L0
-                a6[a8] = a9
+                b1 = v1
+                v6[v8] = b1
             end
-            a6 = (a6 // a8)
-            a10 = 68
-            a11 = 83
-            a12 = 15
+            v6 = (v6 // v8)
+            i1 = 68
+            i2 = 83
+            i3 = 15
             while true do
-                a6 = UPVALS[a5]
-                a4 = 89
-                a7 = (a7 - a5)
+                v6 = UPVALS[v5]
+                n1 = 89
+                v7 = (v7 - v5)
             end
-            a5 = a3
-            a8 = w1[5]
-            a9 = w1[5]
-            a10 = 112
-            a11 = 463
-            a12 = 71
-            a6 = 1
-            a13 = 70
-            a14 = 21
+            v5 = v4
+            v8 = w1[5]
+            b1 = w1[5]
+            i1 = 112
+            i2 = 463
+            i3 = 71
+            n2 = 70
+            i4 = 21
             repeat
-            until not ((a15 ~= 28))
-            a8 = 2
-            a8 = 61
-            a9 = 175
-            a10 = 57
-            a8 = a5
-            a8 = 1
-            a1 = a6
-            a6 = a2
-            a9 = w1[5]
+            until not ((n3 ~= 28))
+            b1 = 175
+            i1 = 57
+            v8 = v5
+            v2 = v6
+            v6 = v3
+            b1 = w1[5]
             while true do
-                a8 = w66
-                a11 = w1[5]
-                a12 = 7
-                a19 = a10
-                a16(a17, a18, a19, a20)
+                v8 = w66
+                i2 = w1[5]
+                i3 = 7
+                v11 = i1
+                fn1(m17, v10, v11, a20)
             end
-            a6 = w118
-            a4 = 48
-            a6 = (a6 + a8)
-            a6 = (a6 * a8)
-            a11 = 231
-            a12 = 71
+            v6 = w118
+            n1 = 48
+            v6 = (v6 + v8)
+            v6 = (v6 * v8)
+            i2 = 231
+            i3 = 71
             repeat
-            until not ((a13 ~= 254))
-            a9 = true
-                -- (constant test eliminated: if (a13 ~= 69) then)
-                a6[a8] = a9
-            a11 = w58
-            a16 = a6
-            a17 = a8
-            a18 = a11
-            a9 = a1
-            a11 = 213
-            a12 = 91
-            while true do -- (empty spin loop: unrestructured dispatcher exit)
-            end
-            a6 = w78
-            a6 = w118
-            a9 = w1[5]
-            a6[a8] = a9
-            a4 = 98
-            a6[a8] = a9
-            a6 = a1
-            a6 = w118
-            a8 = a5
-            a10 = 69
-            a5 = 1
-            a6 = w1[5]
-            a7 = w1[5]
-            w58 = a6
-            a6[a8] = a9
-            a6 = w118
-            a10 = 17
+            until not ((n2 ~= 254))
+            b1 = true
+                -- (constant test eliminated: if (n2 ~= 69) then)
+                v6[v8] = b1
+            i2 = w58
+            fn1 = v6
+            m17 = v8
+            v10 = i2
+            b1 = v2
+            i2 = 213
+            i3 = 91
+            -- (empty spin loop: dispatcher exit the structurer could not
+            --  recover; commented out -- it can never terminate on its own)
+            -- while true do
+            -- end
+            v6 = w78
+            v6 = w118
+            b1 = w1[5]
+            v6[v8] = b1
+            n1 = 98
+            v6[v8] = b1
+            v6 = v2
+            v6 = w118
+            v8 = v5
+            i1 = 69
+            v6 = w1[5]
+            v7 = w1[5]
+            w58 = v6
+            v6[v8] = b1
+            v6 = w118
+            i1 = 17
         end
         w120 = w1[5]
         w121 = w1[5]
-        a122 = 94
+        v94 = 94
     end
-    a123 = a123()
+    v95 = v95()
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w116 = w112
-    a117 = w17
-    w116(a117)
+    v91 = w17
+    w116(v91)
     w116 = w112
-    a117 = w18
-    w116(a117)
-    w10 = 115
-    w121(a122, a123, w124, w125)
+    v91 = w18
+    w116(v91)
+    state = 115
+    w121(v94, v95, w124, w125)
     w121 = w118[10]
     w101[13] = w121
     w121 = w84
-    a122 = L7
-    a122 = a122()
-    a123 = w118[10]
+    v94 = L7
+    v94 = v94()
+    v95 = w118[10]
     w124 = 1
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w121 = w118[4]
     w101[14] = w40
     w121 = w84
-    a122 = w118[4]
-    a123 = L7
-    a123 = a123()
+    v94 = w118[4]
+    v95 = L7
+    v95 = v95()
     w124 = 1
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w121 = w118[7]
-    w101[15] = w30
+    w101[15] = v20
     w120 = 95
-    a129 = 613
-    a130 = true
-    a127(a128, a129, a130, a131)
-    w121 = a119[45]
+    v97 = 613
+    b5 = true
+    b3(b4, v97, b5, v98)
+    w121 = v92[45]
     w101[59] = w84
     w120 = 90
-    w101(a102, a103)
+    w101(fn2, fn3)
     w101 = w1[5]
-    w10 = 30
+    state = 30
     if (w120 >= 21) then
     else
         w74 = w1[65]
         w75 = {}
-        a76 = w1[5]
+        v62 = w1[5]
     end
-    a127 = 813
-    w124 = w124(w125, a126, a127)
+    b3 = 813
+    w124 = w124(w125, b2, b3)
     w125 = 807
-    a126 = true
-    a123(w124, w125, a126, a127)
-    a122 = 102
-    a132 = a129[4]
-    a133 = 95
-        -- (constant test eliminated: if (36 >= w10) then)
-    a68 = w1[59]
-    w10 = 29
+    b2 = true
+    v95(w124, w125, b2, b3)
+    v94 = 102
+    v99 = v97[4]
+    v100 = 95
+        -- (constant test eliminated: if (36 >= state) then)
+    v55 = w1[59]
+    state = 29
     w124 = "NextUnitVector"
     w124 = w121[w124]
     w125 = "NextUnitVector"
-    a123(w124, w125)
-    a123 = w97
+    v95(w124, w125)
+    v95 = w97
     w124 = "NextInteger"
     w124 = w121[w124]
     w125 = "NextInteger"
-    a123(w124, w125)
-    a123 = w97
+    v95(w124, w125)
+    v95 = w97
     w124 = "NextNumber"
     w124 = w121[w124]
     w125 = "NextNumber"
-    a123(w124, w125)
-    a123 = 23
+    v95(w124, w125)
+    v95 = 23
     w124 = 66
     w125 = 43
     w121 = w84
-    a122 = L7
-    a122 = a122()
-    a123 = a119[a119]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[v92]
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w120 = 79
-    a89 = w1[5]
+    v73 = w1[5]
     w90 = w1[5]
-    w10 = 60
-    a81 = w1[66]
-    w10 = 11
-    a127 = a119[31]
-    a128 = 1
-    w125(a126, a127, a128, a129)
+    state = 60
+    v66 = w1[66]
+    state = 11
+    b3 = v92[31]
+    b4 = 1
+    w125(b2, b3, b4, v97)
     w120 = 92
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = w118[1]
+    v94 = L7
+    v94 = v94()
+    v95 = w118[1]
     w124 = 1
     w121 = 87
-    a122 = 281
-    a123 = 97
+    v94 = 281
+    v95 = 97
     while true do
-        a128 = "Y"
-        a128 = a126[a128]
-        a129 = "Scale"
-        a128 = a128[a129]
+        b4 = "Y"
+        b4 = b2[b4]
+        v97 = "Scale"
+        b4 = b4[v97]
     end
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w120 = 78
     w121 = w84
-    a122 = a119[51]
-    a123 = L7
-    a123 = a123()
-    a122 = 119
+    v94 = v92[51]
+    v95 = L7
+    v95 = v95()
+    v94 = 119
     w125 = w97
-    a126 = "GetAsync"
-    a126 = a119[a126]
-    a127 = "GetAsync"
-    w125(a126, a127)
+    b2 = "GetAsync"
+    b2 = v92[b2]
+    b3 = "GetAsync"
+    w125(b2, b3)
     w124 = 114
     w125 = w97
-    a126 = "PostAsync"
-    a126 = a119[a126]
-    a127 = "PostAsync"
-    w125(a126, a127)
+    b2 = "PostAsync"
+    b2 = v92[b2]
+    b3 = "PostAsync"
+    w125(b2, b3)
     w125 = w97
-    a126 = "RequestAsync"
-    a126 = a119[a126]
-    a127 = "RequestAsync"
-    w125(a126, a127)
-    a122 = 15
-    a123 = w118
+    b2 = "RequestAsync"
+    b2 = v92[b2]
+    b3 = "RequestAsync"
+    w125(b2, b3)
+    v94 = 15
+    v95 = w118
     w124 = w121
     w125 = "Folder"
-    a123(w124, w125)
-    a123 = w84
+    v95(w124, w125)
+    v95 = w84
     w124 = "Parent"
     w124 = w121[w124]
     w125 = w120
-    a126 = true
-    a123(w124, w125, a126, a127)
-    a123 = "WaitForChild"
-    a123 = w120[a123]
+    b2 = true
+    v95(w124, w125, b2, b3)
+    v95 = "WaitForChild"
+    v95 = w120[v95]
     w124 = w84
     w125 = "Parent"
     w125 = w121[w125]
-    a126 = "Parent"
-    a126 = w121[a126]
-    a127 = true
-    w124(w125, a126, a127, a128)
+    b2 = "Parent"
+    b2 = w121[b2]
+    b3 = true
+    w124(w125, b2, b3, b4)
     w124 = w97
-    w125 = a123
-    a126 = "WaitForChild"
-    w124(w125, a126)
+    w125 = v95
+    b2 = "WaitForChild"
+    w124(w125, b2)
     w124 = w1[5]
     w125 = 116
-    a126 = 133
-    a127 = 17
-    if (not a119) then
+    b2 = 133
+    b3 = 17
+    if (not v92) then
     else
-        a126 = w55
-        a126()
+        b2 = w55
+        b2()
     end
-    a127 = w118[12]
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    a126 = L7
-    a126 = a126()
-    a127 = a119[38]
-    a128 = 2
-    w125(a126, a127, a128, a129)
+    b3 = w118[12]
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    b2 = L7
+    b2 = b2()
+    b3 = v92[38]
+    b4 = 2
+    w125(b2, b3, b4, v97)
     w121 = 6
-    a122 = 334
-    a123 = 82
-    a126 = w45
-    a127 = L6
-    a126, a127, a128 = a126(a127, a128)
-    a123 = a126
-    w124 = a127
+    v94 = 334
+    v95 = 82
+    b2 = w45
+    b3 = L6
+    b2, b3, b4 = b2(b3, b4)
+    v95 = b2
+    w124 = b3
     w125 = 81
     w120 = 55
     w120 = 42
-    w121 = a119[26]
-    w101[81] = L635
-    a119 = w30
-    w118(a119)
-    w10 = 42
-    w125 = a119[36]
-    w101[67] = a103
-        -- (constant test eliminated: if (a122 >= 106) then)
-    w125 = a119[1]
+    w121 = v92[26]
+    w101[81] = v327
+    v92 = v20
+    w118(v92)
+    state = 42
+    w125 = v92[36]
+    w101[67] = fn3
+        -- (constant test eliminated: if (v94 >= 106) then)
+    w125 = v92[1]
     w101[31] = w125
-    w10 = 10
-    a122 = w1[169]
-    a123 = L12[4]
-    a122 = a122(a123)
-    w121 = w121(a122)
-    a122 = L12[6]
-    w121 = (w121 + a122)
-    a122 = L12[1]
-    w121 = (w121 - a122)
-    a122 = L12[7]
-    w121 = (w121 + a122)
+    state = 10
+    v94 = w1[169]
+    v95 = L12[4]
+    v94 = v94(v95)
+    w121 = w121(v94)
+    v94 = L12[6]
+    w121 = (w121 + v94)
+    v94 = L12[1]
+    w121 = (w121 - v94)
+    v94 = L12[7]
+    w121 = (w121 + v94)
     w121 = (-7254156035 + w121)
-    a122 = 1
+    v94 = 1
     w121 = w118[9]
     w101[17] = w18
     w120 = 8
     w71 = identifyexecutor
-    w10 = 74
+    state = 74
     if not ((w124 == 252)) then
-        w125 = a119[51]
+        w125 = v92[51]
         w101[33] = w27
     end
     w125 = w83
-    a126 = L7
-    a126 = a126()
-    a127 = a119[32]
-    a128 = 1
-    w125(a126, a127, a128, a129)
+    b2 = L7
+    b2 = b2()
+    b3 = v92[32]
+    b4 = 1
+    w125(b2, b3, b4, v97)
     w120 = 66
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[17]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[17]
     w124 = 1
-    w121(a122, a123, w124, w125)
-    a132 = "X"
-    a132 = a131[a132]
-    a132 = (a132 * 100)
-    a132 = (a132 // 1)
-    w101[95] = a126
-    a122 = 27
-    a133 = a133(a134, a135)
-    a133 = (#a132)
-    a133 = w90
-    a134 = a132
-    a133 = a133(a134)
-    a133 = a126[a133]
-    if a133 then
-        w120 = (w120 + a133)
+    w121(v94, v95, w124, w125)
+    v99 = "X"
+    v99 = v98[v99]
+    v99 = (v99 * 100)
+    v99 = (v99 // 1)
+    w101[95] = b2
+    v94 = 27
+    v100 = v100(b6, v101)
+    v100 = (#v99)
+    v100 = w90
+    b6 = v99
+    v100 = v100(b6)
+    v100 = b2[v100]
+    if v100 then
+        w120 = (w120 + v100)
         w125 = (w125 + 1)
         if (50 >= w125) then
-            a131, a132, a133 = coroutine.resume(a131, a132, a133)
-            if a131 then
-                a133 = w80
-                a134 = "string"
-                a135 = w13
-                a136 = a132
-                a135 = a135(a136)
+            v98, v99, v100 = coroutine.resume(v98, v99, v100)
+            if v98 then
+                v100 = w80
+                b6 = "string"
+                v101 = w13
+                v102 = v99
+                v101 = v101(v102)
             else
                 w125 = "HumanoidCollisionType"
-                w125 = a119[w125]
-                a126 = "OuterBox"
+                w125 = v92[w125]
+                b2 = "OuterBox"
                 w125 = w83
-                a126 = L7
-                a126 = a126()
-                a127 = w118[13]
-                a128 = 2
-                w125(a126, a127, a128, a129)
+                b2 = L7
+                b2 = b2()
+                b3 = w118[13]
+                b4 = 2
+                w125(b2, b3, b4, v97)
                 w125 = w118[6]
             end
         end
     end
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    w97 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, ...) -- F313
-        local L38, L201
-        a4 = w33
-        a5 = a1
-        a4 = a4(a5)
-        a4 = w84
-        a5 = w13
-        a6 = a1
-        a5 = a5(a6)
-        a6 = "function"
-        a4(a5, a6)
-        a4 = w88
-        a5 = "'setfenv' cannot change environment of given object"
-        a6 = w60
-        a7 = a1
-        a8 = w95
-        a4(a5, a6, a7, a8, a9)
-        a4 = w51
-        a5 = a1
-        a6 = "slnaf"
-        a4, a5, a6, a7, a8, a9, a10 = a4(a5, a6, a7)
-        a10 = w83
-        a11 = "[C]"
-        a12 = a4
-        a10(a11, a12)
-        a10 = 66
-        a11 = 430
-        a12 = 60
-        a4 = w55
-        a4()
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    w97 = function(v1, b1, v2, fn1, fn2, v3, v4, v5, v6, fn3, i1, i2, state, fn4, fn5, v7, v8, v9, a19, ...) -- F313
+        local v10, v11
+        fn1 = w33
+        fn2 = v1
+        fn1 = fn1(fn2)
+        fn1 = w84
+        fn2 = w13
+        v3 = v1
+        fn2 = fn2(v3)
+        v3 = "function"
+        fn1(fn2, v3)
+        fn1 = w88
+        fn2 = "'setfenv' cannot change environment of given object"
+        v3 = w60
+        v4 = v1
+        v5 = w95
+        fn1(fn2, v3, v4, v5, v6)
+        fn1 = w51
+        fn2 = v1
+        v3 = "slnaf"
+        fn1, fn2, v3, v4, v5, v6, fn3 = fn1(fn2, v3, v4)
+        fn3 = w83
+        i1 = "[C]"
+        i2 = fn1
+        fn3(i1, i2)
+        fn3 = 66
+        i1 = 430
+        i2 = 60
+        fn1 = w55
+        fn1()
         repeat
-        until not (a3)
-        a14 = w84
-        a15 = a6
-        a16 = a2
-        a14(a15, a16)
-        a14 = w84
-        a15 = 0
-        a16 = a7
-        a14(a15, a16)
-        a14 = w84
-        a15 = true
-        a16 = a8
-        a14(a15, a16)
-        a14 = UPVALS[a1]
-        a15 = a1
-        a16 = a9
-        a14(a15, a16)
+        until not (v2)
+        fn4 = w84
+        fn5 = v3
+        v7 = b1
+        fn4(fn5, v7)
+        fn4 = w84
+        fn5 = 0
+        v7 = v4
+        fn4(fn5, v7)
+        fn4 = w84
+        fn5 = true
+        v7 = v5
+        fn4(fn5, v7)
+        fn4 = UPVALS[v1]
+        fn5 = v1
+        v7 = v6
+        fn4(fn5, v7)
         while true do
-            a14 = 65
+            fn4 = 65
         end
-        a14 = w71
-        a15(a16, a17)
-        a15 = w84
-        a16 = w74
-        a17 = a1
-        a16 = a16(a17)
-        a17 = true
-        a15 = w84
-        a16 = false
-        a17 = w85
-        a18 = a1
-        a15(a16, a17(a18, a19))
-        a14 = 106
+        fn4 = w71
+        fn5(v7, v8)
+        fn5 = w84
+        v7 = w74
+        v8 = v1
+        v7 = v7(v8)
+        v8 = true
+        fn5 = w84
+        v7 = false
+        v8 = w85
+        v9 = v1
+        fn5(v7, v8(v9, a19))
+        fn4 = 106
     end
-    a99 = w97
+    v81 = w97
     w100 = w48
     w101 = "getmetatable"
-    a99(w100, w101)
-    w10 = 32
-    a128 = a117
-    a129 = "Path2D"
-    a128 = a128(a129)
-    a123 = a128
-    a113 = w112
-    a114 = a57
-    a115 = -19393
-    a113(a114, a115)
-    a113 = w1[5]
-    w10 = 107
+    v81(w100, w101)
+    state = 32
+    b4 = v91
+    v97 = "Path2D"
+    b4 = b4(v97)
+    v95 = b4
+    v89 = w112
+    fn6 = v44
+    v90 = -19393
+    v89(fn6, v90)
+    v89 = w1[5]
+    state = 107
     w118 = w112
-    a119 = a94
-    w118(a119)
+    v92 = fn1
+    w118(v92)
     w118 = w112
-    a119 = w51
-    w118(a119)
+    v92 = w51
+    w118(v92)
     w118 = w112
-    a119 = a99
-    w118(a119)
+    v92 = v81
+    w118(v92)
     w118 = w97
-    a119 = a117
+    v92 = v91
     w120 = "new"
-    w118(a119, w120)
+    w118(v92, w120)
     w118 = w112
-    a119 = a117
+    v92 = v91
     w120 = w1[5]
-    w118(a119, w120)
-    w10 = 43
-    a123 = v9
-    a123 = a123()
-    w120 = bit32.bxor(a123, 1180920661)
-    w10 = 68
+    w118(v92, w120)
+    state = 43
+    v95 = v9
+    v95 = v95()
+    w120 = bit32.bxor(v95, 1180920661)
+    state = 68
     w121 = w83
-    a122 = L7
-    a122 = a122()
-        -- (constant test eliminated: if (w10 >= 46) then)
-            -- (constant test eliminated: if not ((w10 >= 75)) then)
-            if not ((46 >= w10)) then
-                a127 = a59
-                a128, a129 = nil
+    v94 = L7
+    v94 = v94()
+        -- (constant test eliminated: if (state >= 46) then)
+            -- (constant test eliminated: if not ((state >= 75)) then)
+            if not ((46 >= state)) then
+                b3 = v46
+                b4, v97 = nil
                 -- generic-for iterator (coroutine desugar) reg R127
-                w125 = a119[24]
+                w125 = v92[24]
                 w101[24] = w52
                 w125 = w84
-                a126 = L7
+                b2 = L7
             end
-    w121 = w121(a122)
+    w121 = w121(v94)
     w121 = (-26 + w121)
-    a122 = 1
-    w121(a122, a123, w124, w125)
-    w121 = a119[10]
+    v94 = 1
+    w121(v94, v95, w124, w125)
+    w121 = v92[10]
     w101[65] = w85
     if not ((w120 ~= 78)) then
-        w121 = a119[42]
-        w101[34] = w186
+        w121 = v92[42]
+        w101[34] = v110
         w121 = w83
-        a122 = L7
-        a122 = a122()
-        a123 = a119[42]
+        v94 = L7
+        v94 = v94()
+        v95 = v92[42]
         w124 = 1
-        w121(a122, a123, w124, w125)
-        w121 = a119[53]
-        w101[35] = L551
+        w121(v94, v95, w124, w125)
+        w121 = v92[53]
+        w101[35] = v243
         w121 = w83
-        a122 = L7
-        a122 = a122()
-        a123 = a119[53]
+        v94 = L7
+        v94 = v94()
+        v95 = v92[53]
         w124 = 1
-        w121(a122, a123, w124, w125)
+        w121(v94, v95, w124, w125)
         w121 = 111
-        w125 = a119[31]
-        w101[29] = a106
+        w125 = v92[31]
+        w101[29] = v83
         w125 = w83
-        a126 = L7
-        a126 = a126()
+        b2 = L7
+        b2 = b2()
     end
     while true do
-        a134 = "Y"
-        a134 = a128[a134]
-        a135 = true
-        a133(a134, a135)
+        b6 = "Y"
+        b6 = b4[b6]
+        v101 = true
+        v100(b6, v101)
     end
-    a133 = a119
+    v100 = v92
     w101 = w97
-    a102 = w2
-    a103 = "assert"
-    w101(a102, a103)
+    fn2 = v2
+    fn3 = "assert"
+    w101(fn2, fn3)
     w101 = w97
-    a102 = w3
-    a103 = "error"
-    w78 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, ...) -- F329
-        local L78
-        a3 = w50
-        a4 = w1[5]
-        a5 = 38
-        if not ((a8 ~= 9)) then
-            a3 = w58
-            a4 = 1
-            a3 = (a3 + a4)
-            w58 = a3
-            repeat
-            until not ((not a3))
-            a6 = w1[5]
-            a7 = 88
-            a8 = 139
-            a9 = 51
-            a6 = a3
-            a7 = a4
-            a6 = a6(a7)
-            a3 = a6
-            if (not a3) then
-                a3 = a2
-            end
-        end
-        a9 = a3
-        a10 = a4
-        a11 = a7
-        a12 = a6
-        a9(a10, a11, a12, a13)
-        a8 = 9
-        a5 = 77
-        a4 = a1
-        while true do -- (empty spin loop: unrestructured dispatcher exit)
-        end
-        a3 = w61
-        a3 = w55
-        a4 = w66
-        a7 = w58
-        a8 = 82
-        a10 = a3
-        a10()
-        a6 = 1
-        a6 = 61
-        a7 = 254
-        a8 = 92
+    fn2 = w3
+    fn3 = "error"
+    w78 = function(v1, v2, v3, v4, n1, v5, i1, i2, v6, fn1, v7, v8, a13, ...) -- F329
+        local v9
+        v3 = w50
+        v4 = w1[5]
+        n1 = 38
+        v6 = v3
+        fn1 = v4
+        v7 = i1
+        v8 = v5
+        v6(fn1, v7, v8, a13)
+        i2 = 9
+        n1 = 77
+        v4 = v1
+        -- (empty spin loop: dispatcher exit the structurer could not
+        --  recover; commented out -- it can never terminate on its own)
+        -- while true do
+        -- end
+        v3 = w61
+        v3 = w55
+        v4 = w66
+        i1 = w58
+        i2 = 82
+        fn1 = v3
+        fn1()
+        i1 = 254
+        i2 = 92
     end
-    w10 = 50
-    a133 = a126
-    a134 = a122
-    a133 = a133(a134)
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    a123 = a123()
+    state = 50
+    v100 = b2
+    b6 = v94
+    v100 = v100(b6)
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    v95 = v95()
     w124 = 2
-    w121(a122, a123, w124, w125)
-    w125 = a119[39]
+    w121(v94, v95, w124, w125)
+    w125 = v92[39]
     w101[68] = w64
     w125 = w83
-    a126 = L7
-    a126 = a126()
-    a127 = a119[39]
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    w125 = a119[14]
-    w101[69] = a42
+    b2 = L7
+    b2 = b2()
+    b3 = v92[39]
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    w125 = v92[14]
+    w101[69] = v30
     w111 = w1[5]
-    w116 = a43
-    a117 = function(a1, a2, a3, ...) -- F246
-        local L28, L451
+    w116 = v31
+    v91 = function(v1, a2, a3, ...) -- F246
+        local v2, v3
         while true do
             -- (junk op: register-file store with a decoded-at-runtime index)
-            w111 = a1
+            w111 = v1
             do return  end
         end
-        a1 = w23
+        v1 = w23
     end
-    w116(a117)
-    a104 = w97
-    a105 = w22
-    a106 = "isyieldable"
-    a104(a105, a106)
-    w10 = 97
-    a123 = w83
+    w116(v91)
+    fn4 = w97
+    v82 = v14
+    v83 = "isyieldable"
+    fn4(v82, v83)
+    state = 97
+    v95 = w83
     w124 = "table"
     w125 = w13
-    a126 = L12
-    w125 = w125(a126)
-    a126 = true
-    a123(w124, w125, a126, a127)
-    w28 = false
-    w29 = true
-    w27[w28] = w29
-    w28 = true
-    w29 = false
-    w27[w28] = w29
-    w28 = w1[27]
-    w29 = "concat"
-    w29 = w9[w29]
-    w30 = w1[5]
-    a31 = w1[5]
-    a32 = w1[5]
-    w10 = 91
+    b2 = L12
+    w125 = w125(b2)
+    b2 = true
+    v95(w124, w125, b2, b3)
+    k3 = false
+    v19 = true
+    w27[k3] = v19
+    k3 = true
+    v19 = false
+    w27[k3] = v19
+    k3 = w1[27]
+    v19 = "concat"
+    v19 = t5[v19]
+    v20 = w1[5]
+    v21 = w1[5]
+    v22 = w1[5]
+    state = 91
     w33 = "create"
-    a32 = w6[w33]
-    w33 = function(a1, a2, a3, a4, a5, a6, a7, ...) -- F487
-        local L137, L278, L309
-        a2 = w1[5]
-        a3 = w1[5]
-        a4 = 96
-        a4 = 63
-        a2 = a1
+    v22 = t4[w33]
+    w33 = function(k1, k2, t1, n1, v1, a6, a7, ...) -- F487
+        local v2, v3, v4
+        k2 = w1[5]
+        t1 = w1[5]
+        n1 = 96
+        n1 = 63
+        k2 = k1
         while true do
-            a3 = UPVALS[a1]
-            a2 = (not a2)
-            a3 = a3[a2]
-            a5 = a3
-            do return a5 end
+            t1 = UPVALS[k1]
+            k2 = (not k2)
+            t1 = t1[k2]
+            v1 = t1
+            do return v1 end
         end
     end
-    a34 = "create"
-    a34 = w20[a34]
-    a119 = w1[5]
+    k5 = "create"
+    k5 = t7[k5]
+    v92 = w1[5]
     w120 = w1[5]
     w121 = 86
-    a130 = (a130 * 100)
-    a130 = (a130 // 1)
-    w101[92] = w6
-    a135 = 0.20000000298023224
-    a133 = a133(a134, a135)
-    a128 = a133
-    w124 = a89
-    w125 = a119
+    b5 = (b5 * 100)
+    b5 = (b5 // 1)
+    w101[92] = t4
+    v101 = 0.20000000298023224
+    v100 = v100(b6, v101)
+    b4 = v100
+    w124 = v73
+    w125 = v92
     w124(w125)
-    w111 = a41
-    w112 = a43
-    a113 = function(a1, a2, ...) -- F154
-        a1 = w39
-        a1()
+    w111 = v29
+    w112 = v31
+    v89 = function(fn1, a2, ...) -- F154
+        fn1 = w39
+        fn1()
         do return  end
     end
-    w112 = w112(a113)
+    w112 = w112(v89)
     w111(w112)
-    w10 = 81
-    a114 = w112
-    a115 = w60
+    state = 81
+    fn6 = w112
+    v90 = w60
     w116 = -31710
-    a114(a115, w116)
-    w10 = 78
-    a132 = "Y"
-    a132 = a131[a132]
-    a132 = (a132 * 100)
-    a132 = (a132 // 1)
-    w101[96] = L609
-    a132 = w1[5]
-    a133 = 69
-    a134 = 491
-    a135 = 125
+    fn6(v90, w116)
+    state = 78
+    v99 = "Y"
+    v99 = v98[v99]
+    v99 = (v99 * 100)
+    v99 = (v99 // 1)
+    w101[96] = v301
+    v99 = w1[5]
+    v100 = 69
+    b6 = 491
+    v101 = 125
     while true do
-        a126 = 0
-        a127 = 0
-        a123 = a123(w124, w125, a126, a127)
-        w121["Position"] = w212
-        a123 = "Size"
-        w124 = a114
+        b2 = 0
+        b3 = 0
+        v95 = v95(w124, w125, b2, b3)
+        w121["Position"] = v113
+        v95 = "Size"
+        w124 = fn6
         w125 = 0
-        a126 = 144
-        a127 = 0
+        b2 = 144
+        b3 = 0
     end
     w112 = 1188220356
     w125 = w118[15]
@@ -3415,1812 +3365,1799 @@ L15 = function(w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13, w14, w15,
     w121 = L12[4]
     w121 = L12[2]
     w121 = (-2535928120 + w121)
-    a122 = 1
-    a122 = a122(a123)
-    a123 = true
-    w120(w121, a122, a123, w124)
+    v94 = 1
+    v94 = v94(v95)
+    v95 = true
+    w120(w121, v94, v95, w124)
     w120 = w1[5]
     w121 = 67
-    a122 = 99
-    a123 = 16
+    v94 = 99
+    v95 = 16
     w125 = w83
-    a126 = L7
-    a126 = a126()
-    a127 = a119[7]
-    a128 = 2
-    w125(a126, a127, a128, a129)
+    b2 = L7
+    b2 = b2()
+    b3 = v92[7]
+    b4 = 2
+    w125(b2, b3, b4, v97)
     w55 = nil
-    a56 = w1[5]
-    w10 = 110
-    a139 = 0
-    a140 = 0
-    a141 = 0
-    a137 = a137(a138, a139, a140, a141)
-    a138 = a114
-    a139 = 0
-    a140 = -7
-    a141 = 0
-    a142 = 2
-    a138(a139, a140, a141, a142, a143)
-    a135()
+    v43 = w1[5]
+    state = 110
+    v105 = 0
+    v106 = 0
+    fn10 = fn10(v103, v104, v105, v106)
+    v103 = fn6
+    v105 = -7
+    v106 = 0
+    v107 = 2
+    v103(v104, v105, v106, v107, a143)
+    v101()
     -- table.move range
-    a128(a129, a130)
-    w125 = a123; w124 = a123["GetLength"]
+    b4(v97, b5)
+    w125 = v95; w124 = v95["GetLength"]
     w124 = w124(w125)
     w125 = (w124 * 100)
     w125 = (w125 // 1)
     w101[82] = w111
     w125 = w1[5]
-    a122 = 80
-    w125 = a119[38]
+    v94 = 80
+    w125 = v92[38]
     w101[30] = w50
     w125 = w84
     w125 = w83
-    a126 = L7
-    a126 = a126()
-    a127 = a119[40]
-    a128 = 1
-    w125(a126, a127, a128, a129)
+    b2 = L7
+    b2 = b2()
+    b3 = v92[40]
+    b4 = 1
+    w125(b2, b3, b4, v97)
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[27]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[27]
     w124 = 2
-    w121(a122, a123, w124, w125)
-    w121 = a119[50]
+    w121(v94, v95, w124, w125)
+    w121 = v92[50]
     w101[42] = w110
     w120 = 7
-    a73 = Vector2
-    w101[22] = a69
+    v60 = Vector2
+    w101[22] = v56
     w120 = 89
     while true do
-        a131 = a127
-        a132 = a129
-        a133 = true
-        a130(a131, a132, a133, a134)
+        v98 = b3
+        v99 = v97
+        v100 = true
+        b5(v98, v99, v100, b6)
         w125 = 1
     end
-    a130 = w84
-    w121 = a119; w120 = a119["Destroy"]
+    b5 = w84
+    w121 = v92; w120 = v92["Destroy"]
     w120(w121)
     w120 = w1[w1]
     w121 = w1[5]
-    a122 = 14
-    w125 = a119[15]
+    v94 = 14
+    w125 = v92[15]
     w101[76] = w124
-    if (a122 ~= 63) then
+    if (v94 ~= 63) then
         w124 = 1
-        w125 = a123
-        a126 = 1
+        w125 = v95
+        b2 = 1
     else
-        a122 = 18
+        v94 = 18
         w125 = w121; w124 = w121["NextInteger"]
-        a126 = 181
-        a127 = 605
-        w124 = w124(w125, a126, a127)
-        a123 = (w124 % 24)
+        b2 = 181
+        b3 = 605
+        w124 = w124(w125, b2, b3)
+        v95 = (w124 % 24)
     end
     w125 = w83
-    a126 = L7
-    a126 = a126()
-    a127 = a119[59]
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    w125 = a119[18]
-    w101[73] = a96
+    b2 = L7
+    b2 = b2()
+    b3 = v92[59]
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    w125 = v92[18]
+    w101[73] = v78
     w125 = 0
-    a126 = w1[5]
-    a127 = 54
-    a128 = 98
-    a127, a128, a129 = coroutine.resume(a127, a128, a129)
-    if a127 then
-        a122 = (a122 + 1)
-        a99 = w1[5]
-        w10 = 7
+    b2 = w1[5]
+    b3 = 54
+    b4 = 98
+    b3, b4, v97 = coroutine.resume(b3, b4, v97)
+    if b3 then
+        v94 = (v94 + 1)
+        v81 = w1[5]
+        state = 7
     end
-    w121 = a119[47]
+    w121 = v92[47]
     w101[45] = w58
     w120 = 29
     w121 = w83
-    w121 = a119[62]
-    w101[54] = a53
+    w121 = v92[62]
+    w101[54] = k6
     w121 = w84
-    a122 = a119[62]
-    a123 = L7
-    a123 = a123()
+    v94 = v92[62]
+    v95 = L7
+    v95 = v95()
     w124 = 1
-    w121(a122, a123, w124, w125)
-    w125 = a119[11]
-    w101[25] = a102
+    w121(v94, v95, w124, w125)
+    w125 = v92[11]
+    w101[25] = fn2
     w17 = "match"
-    w12 = w5[w17]
+    w12 = stringLib[w17]
     w13 = w1[13]
     w17 = "find"
-    w14 = w5[w17]
-    w10 = 92
-        -- (constant test eliminated: if not ((8 >= w10)) then)
-            -- (constant test eliminated: if not ((w10 >= 102)) then)
+    w14 = stringLib[w17]
+    state = 92
+        -- (constant test eliminated: if not ((8 >= state)) then)
+            -- (constant test eliminated: if not ((state >= 102)) then)
             w8 = 6666
-            w10 = 8
+            state = 8
             w125 = w84
-            a126 = L7
-            a126 = a126()
-            a127 = w118[5]
-            a128 = 2
-            w125(a126, a127, a128, a129)
-            w120 = a119
-            a122 = 21
-            a115 = a127
-            a119 = w1[5]
+            b2 = L7
+            b2 = b2()
+            b3 = w118[5]
+            b4 = 2
+            w125(b2, b3, b4, v97)
+            w120 = v92
+            v94 = 21
+            v90 = b3
+            v92 = w1[5]
             w120 = 14
             w121 = 79
-            a122 = 2
-            a99[w100] = w101
+            v94 = 2
+            v81[w100] = w101
             w100 = "isvararg"
             w101 = true
-            a99[w100] = w101
-            a96 = a99
-            w10 = 5
-    w6 = coroutine
-    w11 = "gmatch"
-    w7 = w5[w11]
+            v81[w100] = w101
+            v78 = v81
+            state = 5
+    t4 = coroutine
+    v6 = "gmatch"
+    w7 = stringLib[v6]
     w124 = v9
     w124()
-    a131 = a123; a130 = a123["GetPositionOnCurveArcLength"]
-    a132 = 0.4000000059604645
-    a130 = a130(a131, a132)
-    a131 = a130[0]
-    a132 = "Scale"
-    a131 = a131[a132]
-    a131 = (a131 * 100)
-    a131 = (a131 // 1)
+    v98 = v95; b5 = v95["GetPositionOnCurveArcLength"]
+    v99 = 0.4000000059604645
+    b5 = b5(v98, v99)
+    v98 = b5[0]
+    v99 = "Scale"
+    v98 = v98[v99]
+    v98 = (v98 * 100)
+    v98 = (v98 // 1)
     w125 = 0.9787031188959563
-    a126 = true
-    a123(w124, w125, a126, a127)
-    a123 = w83
+    b2 = true
+    v95(w124, w125, b2, b3)
+    v95 = w83
     w125 = w121; w124 = w121["NextNumber"]
     w124 = w124(w125)
     w125 = 0.5760869541013449
-    a126 = true
-    a123(w124, w125, a126, a127)
-    a123 = w1[5]
-    a122 = 63
+    b2 = true
+    v95(w124, w125, b2, b3)
+    v95 = w1[5]
+    v94 = 63
     w125 = w84
-    a126 = a123[w121]
-    a127 = w120
-    a128 = true
-    w125(a126, a127, a128, a129)
+    b2 = v95[w121]
+    b3 = w120
+    b4 = true
+    w125(b2, b3, b4, v97)
     w124 = 92
     w121 = w118
-    a122 = a119
-    a123 = "RunService"
-    w121(a122, a123)
+    v94 = v92
+    v95 = "RunService"
+    w121(v94, v95)
     w120 = 61
     w121 = w83
-    a122 = a113
-    a123 = "Parent"
-    a123 = a119[a123]
+    v94 = v89
+    v95 = "Parent"
+    v95 = v92[v95]
     w124 = true
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w121 = w97
-    a122 = w1[w1]
-    a122 = a119[a122]
-    a123 = "IsStudio"
-    w121(a122, a123)
+    v94 = w1[w1]
+    v94 = v92[v94]
+    v95 = "IsStudio"
+    w121(v94, v95)
     w121 = w97
-    a122 = "IsClient"
-    a122 = a119[a122]
-    a123 = "IsClient"
-    w121(a122, a123)
+    v94 = "IsClient"
+    v94 = v92[v94]
+    v95 = "IsClient"
+    w121(v94, v95)
     w121 = 31
-    a122 = 39
-    a123 = 8
-    a102 = w97
-    a103 = a57
-    a104 = "getfenv"
-    a102(a103, a104)
-    w10 = 106
-    a104 = w97
-    a105 = w23
-    a106 = "running"
-    a104(a105, a106)
-    a104 = w97
-    a105 = a32
-    a106 = "create"
-    a104(a105, a106)
-    a104 = w1[5]
-    a105 = w1[5]
-    w10 = 76
-    a122 = 0
-    w111 = a76
+    v94 = 39
+    v95 = 8
+    fn2 = w97
+    fn3 = v44
+    fn4 = "getfenv"
+    fn2(fn3, fn4)
+    state = 106
+    fn4 = w97
+    v82 = w23
+    v83 = "running"
+    fn4(v82, v83)
+    fn4 = w97
+    v82 = v22
+    v83 = "create"
+    fn4(v82, v83)
+    fn4 = w1[5]
+    v82 = w1[5]
+    state = 76
+    v94 = 0
+    w111 = v62
     w112 = (w93 % 256)
     w112 = (w93 - w112)
     w112 = (w112 / 256)
     w111(w112)
-    w10 = 77
-    w121 = (w121 - a122)
-    a122 = L12[1]
-    w121 = (w121 - a122)
-    a122 = L12[7]
-    w121 = (w121 ~= a122)
+    state = 77
+    w121 = (w121 - v94)
+    v94 = L12[1]
+    w121 = (w121 - v94)
+    v94 = L12[7]
+    w121 = (w121 ~= v94)
     if (not w121) then
     end
-    w101[11] = w9
-    a41 = "yield"
-    w39 = w6[a41]
-    w10 = 116
-    w125 = a119[32]
-    w101[32] = w26
+    w101[11] = t5
+    v29 = "yield"
+    w39 = t4[v29]
+    state = 116
+    w125 = v92[32]
+    w101[32] = k2
     w125 = w84
-    a127 = a123; a126 = a123["FromValue"]
-    a128 = a122
-    a126 = a126(a127, a128)
-    a127 = w120
-    a126(a127, a128)
-    if not ((a119 >= 78)) then
-        a119 = 107
+    b3 = v95; b2 = v95["FromValue"]
+    b4 = v94
+    b2 = b2(b3, b4)
+    b3 = w120
+    b2(b3, b4)
+    if not ((v92 >= 78)) then
+        v92 = 107
         w120 = 1
         w121 = w1[169]
     end
     w120 = 1
     w121 = L12[6]
-    a122 = L12[1]
-    w121 = (w121 - a122)
-    a122 = L12[7]
-    w121 = (w121 + a122)
-    a122 = L12[2]
-    a119 = w1[5]
+    v94 = L12[1]
+    w121 = (w121 - v94)
+    v94 = L12[7]
+    w121 = (w121 + v94)
+    v94 = L12[2]
+    v92 = w1[5]
     w120 = 19
-    a106 = "abs"
-    a104 = w19[a106]
-    w10 = 94
+    v83 = "abs"
+    fn4 = mathLib[v83]
+    state = 94
     w116 = w112
-    a117 = w18
-    w116(a117)
-    w10 = 70
-    if (w10 ~= 40) then
+    v91 = w18
+    w116(v91)
+    state = 70
+    if (state ~= 40) then
     else
         w118 = w112
-        a119 = a56
-        w118(a119)
+        v92 = v43
+        w118(v92)
         w118 = w112
     end
-    if not ((33 >= a115)) then
+    if not ((33 >= v90)) then
         w116 = w50
-        a117 = w45
-        w118 = a41
-        a119 = w111
+        v91 = w45
+        w118 = v29
+        v92 = w111
     end
-    a132 = 43
-    a133 = bit32.bxor(a127, 64)
-    a134 = w16
-    a135 = a127
-    a134 = a134(a135)
-    w100[a133] = a134
-    a133 = 47
-    a134 = w36
-    a135 = a131
-    a136 = a126
-    a134(a135, a136)
+    v99 = 43
+    v100 = bit32.bxor(b3, 64)
+    b6 = w16
+    v101 = b3
+    b6 = b6(v101)
+    w100[v100] = b6
+    v100 = 47
+    b6 = w36
+    v101 = v98
+    v102 = b2
+    b6(v101, v102)
     w101 = w97
-    a102 = w37
-    a103 = "tostring"
-    w101(a102, a103)
-    w10 = 123
+    fn2 = w37
+    fn3 = "tostring"
+    w101(fn2, fn3)
+    state = 123
     if not ((111 >= w124)) then
         w125 = w84
-        a126 = a119[15]
-        a127 = L7
-        a127 = a127()
-        a128 = 1
-        w125(a126, a127, a128, a129)
+        b2 = v92[15]
+        b3 = L7
+        b3 = b3()
+        b4 = 1
+        w125(b2, b3, b4, v97)
         w121 = 67
-        a122 = 172
-        a123 = 35
+        v94 = 172
+        v95 = 35
         while true do
-            a128 = 2
-            w125(a126, a127, a128, a129)
+            b4 = 2
+            w125(b2, b3, b4, v97)
         end
     end
     w125 = w84
-    a126 = a119[44]
-    a127 = L7
+    b2 = v92[44]
+    b3 = L7
     w125 = w97
-    a126 = "FromValue"
-    a126 = a123[a126]
-    a127 = "FromValue"
-    w125(a126, a127)
+    b2 = "FromValue"
+    b2 = v95[b2]
+    b3 = "FromValue"
+    w125(b2, b3)
     w125 = w112
-    a126 = a123[0]
-    w125(a126)
+    b2 = v95[0]
+    w125(b2)
     w125 = w112
-    a126 = "FromValue"
-    a126 = a123[a126]
-    w125(a126)
+    b2 = "FromValue"
+    b2 = v95[b2]
+    w125(b2)
     w124 = 50
     w121 = w118[14]
     w101[16] = w66
     w120 = 105
     w124 = w83
-    w125 = a113
-    a126 = "Parent"
-    a126 = a119[a126]
-    a127 = true
-    w124(w125, a126, a127, a128)
+    w125 = v89
+    b2 = "Parent"
+    b2 = v92[b2]
+    b3 = true
+    w124(w125, b2, b3, b4)
     w124 = 31
-    a131[328532366] = L602
-    a131[1929211092] = w260
-    a131[440669232] = L638
-    a131[1011881004] = w273
-    a131[2267675775] = L394
-    a131[1132109174] = L447
-    a131[2571219683] = L495
-    a131[236808915] = L618
-    w125 = a119[27]
-    w101[41] = a81
+    v98[328532366] = v294
+    v98[1929211092] = v116
+    v98[440669232] = v330
+    v98[1011881004] = v117
+    v98[2267675775] = v128
+    v98[1132109174] = v140
+    v98[2571219683] = v187
+    v98[236808915] = v310
+    w125 = v92[27]
+    w101[41] = v66
     w125 = w83
-    a126 = w52
-    a127 = a123
-    a126 = a126(a127)
-    a127 = "Enum"
-    a128 = true
-    w125(a126, a127, a128, a129)
+    b2 = w52
+    b3 = v95
+    b2 = b2(b3)
+    b3 = "Enum"
+    b4 = true
+    w125(b2, b3, b4, v97)
     w124 = 110
     w120 = 86
-    a122 = a113; w121 = a113["GetService"]
-    a123 = "RunService"
-    a140 = -9
-    a136 = a136(a137, a138, a139, a140)
-    a137 = a114
-    a138 = 0
+    v94 = v89; w121 = v89["GetService"]
+    v95 = "RunService"
+    v105 = -9
+    v102 = v102(fn10, v103, v104, v105)
+    fn10 = fn6
+    v103 = 0
     repeat
-    until not ((a122 >= 120))
-    a122 = 106
-    a128 = a119
-    a129 = "Y"
-    a129 = a126[a129]
-    a130 = "Scale"
-    a129 = a129[a130]
-    a130 = true
-    a128(a129, a130)
-    a114 = w112
-    a115 = w13
-    a114(a115)
-    a114 = w112
-    a115 = w40
-    a114(a115)
-    w10 = 81
-    w121 = a119[34]
+    until not ((v94 >= 120))
+    v94 = 106
+    b4 = v92
+    v97 = "Y"
+    v97 = b2[v97]
+    b5 = "Scale"
+    v97 = v97[b5]
+    b5 = true
+    b4(v97, b5)
+    fn6 = w112
+    v90 = w13
+    fn6(v90)
+    fn6 = w112
+    v90 = w40
+    fn6(v90)
+    state = 81
+    w121 = v92[34]
     w101[26] = w112
     w120 = 41
     w121 = w84
-    a122 = a119[6]
-    a123 = L7
-    a123 = a123()
+    v94 = v92[6]
+    v95 = L7
+    v95 = v95()
     w124 = 2
-    w121(a122, a123, w124, w125)
-    w121 = a119[33]
+    w121(v94, v95, w124, w125)
+    w121 = v92[33]
     w101[63] = w121
     w121 = w84
-    a122 = L7
-    a122 = a122()
-    a123 = a119[33]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[33]
     w124 = 1
-    w121(a122, a123, w124, w125)
-    w121 = a119[19]
+    w121(v94, v95, w124, w125)
+    w121 = v92[19]
     w101[64] = w120
     w121 = w84
-    a122 = L7
-    a122 = a122()
-    a123 = a119[19]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[19]
     w124 = 2
-    a132 = a137
+    v99 = fn10
     w121 = 53
-    a122 = 233
-    a123 = 29
+    v94 = 233
+    v95 = 29
     while true do
-        a126 = (a126 // 1)
-        w101[83] = a104
+        b2 = (b2 // 1)
+        w101[83] = fn4
     end
-    a126 = (a126 * 100)
-    while not ((43 >= a122)) do -- while-exit-cond
-        a119 = 4
+    b2 = (b2 * 100)
+    while not ((43 >= v94)) do -- while-exit-cond
+        v92 = 4
         w120 = 0
-        a122 = 43
-        a123 = 0
+        v94 = 43
+        v95 = 0
         w124 = (w120 - 1)
         w125 = 1
     end
-    a119 = 60
+    v92 = 60
     w120 = 1
     w121 = w1[166]
-    a122 = w1[167]
-    a123 = w1[168]
+    v94 = w1[167]
+    v95 = w1[168]
     w124 = L12[2]
     w125 = L12[2]
     w124 = (w124 + w125)
     w125 = L12[1]
     w124 = (w124 + w125)
-    a123 = a123(w124)
-    a122 = a122(a123)
-    a123 = w118[7]
+    v95 = v95(w124)
+    v94 = v94(v95)
+    v95 = w118[7]
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w120 = 50
-    a129 = w112
-    a130 = a123
-    a131 = w1[5]
-    a129(a130, a131)
-    a122 = w13
-    a123 = w120
-    a122 = a122(a123)
-    a126 = "X"
-    a126 = w125[a126]
-    a127 = "Scale"
-    a126 = a126[a127]
-    a131 = a131[a132]
-    a132 = true
-    a130(a131, a132)
-    w111 = function(a1, a2, a3, a4, a5, a6, ...) -- F56
-        a2 = (a1 + 3)
-        a3 = w51
-        a4 = a2
-        a5 = "f"
-        a3 = a3(a4, a5)
-        do return a3 end
+    v97 = w112
+    b5 = v95
+    v98 = w1[5]
+    v97(b5, v98)
+    v94 = w13
+    v95 = w120
+    v94 = v94(v95)
+    b2 = "X"
+    b2 = w125[b2]
+    b3 = "Scale"
+    b2 = b2[b3]
+    v98 = v98[v99]
+    v99 = true
+    b5(v98, v99)
+    w111 = function(v1, v2, fn1, v3, v4, a6, ...) -- F56
+        v2 = (v1 + 3)
+        fn1 = w51
+        v3 = v2
+        v4 = "f"
+        fn1 = fn1(v3, v4)
+        do return fn1 end
     end
-    w10 = 3
-    a133 = "Y"
-    a133 = a128[a133]
-    a133 = (a133 * 100)
-    a133 = (a133 // 1)
-    w101[90] = L466
-    a123 = w84
+    state = 3
+    v100 = "Y"
+    v100 = b4[v100]
+    v100 = (v100 * 100)
+    v100 = (v100 // 1)
+    w101[90] = b7
+    v95 = w84
     w124 = w13
-    w125 = L12[a122]
+    w125 = L12[v94]
     w124 = w124(w125)
     w125 = "number"
-    a123(w124, w125)
+    v95(w124, w125)
     w120 = 47
-    w121 = a119[17]
+    w121 = v92[17]
     w101[47] = w21
-    while true do -- (empty spin loop: unrestructured dispatcher exit)
-    end
-    a122 = 59
-    a123 = w83
+    -- (empty spin loop: dispatcher exit the structurer could not
+    --  recover; commented out -- it can never terminate on its own)
+    -- while true do
+    -- end
+    v94 = 59
+    v95 = w83
     w125 = w121; w124 = w121["NextNumber"]
     w124 = w124(w125)
     w120 = 107
-    w83 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, ...) -- F94
-        local L348
-        a4 = w82
-        a5 = a1
-        a6 = w1[5]
-        a7 = 26
-        a8 = 107
-        a9 = 27
-        if (4 >= a11) then
-            if not ((a11 >= 121)) then
-                if not ((2 >= a11)) then
-                    a5 = (a5 == a6)
-                    a5 = a1
-                    a4 = a5
-                    a5 = w61
-                    a12 = w1[5]
-                    a13 = w1[5]
-                    a11 = 51
-                        -- (constant test eliminated: if (51 >= a11) then)
+    w83 = function(v1, v2, v3, v4, v5, n1, i1, i2, i3, n2, n3, i4, i5, i6, n4, i7, n5, a18, a19, ...) -- F94
+        local v6
+        v4 = w82
+        v5 = v1
+        n1 = w1[5]
+        i1 = 26
+        i2 = 107
+        i3 = 27
+        if (4 >= n3) then
+            if not ((n3 >= 121)) then
+                if not ((2 >= n3)) then
+                    v5 = (v5 == n1)
+                    v5 = v1
+                    v4 = v5
+                    v5 = w61
+                    i4 = w1[5]
+                    i5 = w1[5]
+                    n3 = 51
+                        -- (constant test eliminated: if (51 >= n3) then)
                 end
             end
         end
-        a4 = 1
-        a11 = 2
-        a12 = 82
-        a13 = 106
-        a14 = 24
-        a5 = a3
-        while not ((not a4)) do -- while-exit-cond
+        v4 = 1
+        n3 = 2
+        i4 = 82
+        i5 = 106
+        i6 = 24
+        v5 = v3
+        while not ((not v4)) do -- while-exit-cond
         end
-        a4 = a5
-        a5 = (a5 == a6)
-        if not ((not a5)) then
-            a12 = 107
-            a13 = 288
-            a14 = 125
+        v4 = v5
+        v5 = (v5 == n1)
+        if not ((not v5)) then
+            i4 = 107
+            i5 = 288
+            i6 = 125
         end
-        a14 = a5
-        a15 = a6
-        a16 = a12
-        a17 = a13
-        a14(a15, a16, a17, a18)
-        a14 = 112
-        a15 = 116
-        a16 = 2
-        while true do -- (empty spin loop: unrestructured dispatcher exit)
-        end
-        a5 = w58
-        a5 = a2
+        i6 = v5
+        n4 = n1
+        i7 = i4
+        n5 = i5
+        i6(n4, i7, n5, a18)
+        i6 = 112
+        n4 = 116
+        i7 = 2
+        -- (empty spin loop: dispatcher exit the structurer could not
+        --  recover; commented out -- it can never terminate on its own)
+        -- while true do
+        -- end
+        v5 = w58
+        v5 = v2
         do -- (terminates control flow)
             do return  end
         end
-        a11 = 4
-        a6 = 1
+        n3 = 4
+        n1 = 1
         while true do
-            a11 = a11(a12, a13)
-            a4 = a11
+            n3 = n3(i4, i5)
+            v4 = n3
         end
-        a13 = a6
-        a4 = a3
-        a6 = 2
-        if (a17 >= 116) then
+        i5 = n1
+        v4 = v3
+        n1 = 2
+        if (n5 >= 116) then
         end
-        a4 = w55
-        a11 = a4
-        a11()
-        a6 = a2
-        a11 = a4
-        a12 = a5
-        a6 = 1
-        a5 = (a5 + a6)
-        a13 = a4
-        w58 = a5
-        a5 = a3
-        a11 = 121
+        v4 = w55
+        n3 = v4
+        n3()
+        n1 = v2
+        n3 = v4
+        i4 = v5
+        n1 = 1
+        v5 = (v5 + n1)
+        i5 = v4
+        w58 = v5
+        v5 = v3
+        n3 = 121
     end
-    w84 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, ...) -- F104
-        local L287
-        a4 = w1[5]
-        a5 = w1[5]
-        a6 = w1[5]
-        a7 = 17
-        a8 = 68
-        a9 = 3
-        a6 = a2
-        a11 = a4
-        a12 = a5
-        a13 = a6
-        a11 = a11(a12, a13)
-        a4 = a11
-        a9 = 76
-        a5 = w61
-        a8 = a4
-        if not ((a10 ~= 17)) then
-            a4 = w80
-        end
-        a5 = a1
-        a4 = (not a4)
-        if (not a4) then
-            a4 = a3
+    w84 = function(v1, k1, v2, b1, v3, n1, v4, i1, i2, n2, v5, n3, i3, i4, i5, n4, a17, a18, ...) -- F104
+        local v6
+        b1 = w1[5]
+        v3 = w1[5]
+        n1 = w1[5]
+        v4 = 17
+        i1 = 68
+        i2 = 3
+        n1 = k1
+        v5 = b1
+        n3 = v3
+        i3 = n1
+        v5 = v5(n3, i3)
+        b1 = v5
+        i2 = 76
+        v3 = w61
+        i1 = b1
+        v3 = v1
+        b1 = (not b1)
+        if (not b1) then
+            b1 = v2
         else
-            a4 = w55
-            a7 = a4
-            a7()
+            b1 = w55
+            v4 = b1
+            v4()
         end
-        a5 = w58
-        a9 = 37
-        a5 = (a5 == a6)
-        a13 = 0
-        a14 = 92
-        a15 = 46
-        a5 = (a5 == a6)
+        v3 = w58
+        i2 = 37
+        v3 = (v3 == n1)
+        i3 = 0
+        i4 = 92
+        i5 = 46
+        v3 = (v3 == n1)
         repeat
-        until not ((59 >= a9))
-        a6 = w66
-        a9 = 59
-        a9 = 64
-        a6 = 1
-        a5 = (a5 + a6)
+        until not ((59 >= i2))
+        n1 = w66
+        i2 = 59
+        i2 = 64
+        n1 = 1
+        v3 = (v3 + n1)
         -- (junk closure op at instr 115: child proto not statically decoded)
-        w58 = a5
+        w58 = v3
         repeat
-        until not ((not a4))
-        a7 = 111
-        a8 = 197
-        a9 = 86
-        a5 = a2
-        a4 = a5
-        a7 = w58
-        if not ((a10 >= 197)) then
-            a4 = 0
-            a5 = a3
-        end
-        a9 = 94
-        a10 = a5
-        a11 = a6
-        a12 = a7
-        a13 = a8
-        a10(a11, a12, a13, a14)
-        a6 = 2
-        a5 = a1
-        a4 = a5
-        a7 = nil
-        a8 = w1[5]
-        a9 = 115
-        a10 = 219
-        a11 = 52
-        a6 = 1
+        until not ((not b1))
+        v4 = 111
+        i1 = 197
+        i2 = 86
+        v3 = k1
+        b1 = v3
+        v4 = w58
+            -- (constant test eliminated: if not ((n2 >= 197)) then)
+            b1 = 0
+            v3 = v2
+        i2 = 94
+        n2 = v3
+        v5 = n1
+        n3 = v4
+        i3 = i1
+        n2(v5, n3, i3, i4)
+        n1 = 2
+        v3 = v1
+        b1 = v3
+        v4 = nil
+        i1 = w1[5]
+        i2 = 115
+        n2 = 219
+        n1 = 1
     end
     w85 = w1[5]
     w86 = w1[5]
-    a87 = w1[5]
+    v71 = w1[5]
     w88 = w1[5]
-    a127 = "IsServer"
-    w125(a126, a127)
-    w10 = 2
-    if not ((a123 ~= 16)) then
+    b3 = "IsServer"
+    w125(b2, b3)
+    state = 2
+    if not ((v95 ~= 16)) then
     end
     w124 = w36
-    w125 = a119
-    a126 = w1[5]
-    w124(w125, a126)
-    w10 = 11
+    w125 = v92
+    b2 = w1[5]
+    w124(w125, b2)
+    state = 11
     repeat
-    until not ((w10 > 59))
-    a106 = w97
+    until not ((state > 59))
+    v83 = w97
     w107 = w39
     w108 = "yield"
-    a106(w107, w108)
-    a106 = w97
-    w107 = a41
+    v83(w107, w108)
+    v83 = w97
+    w107 = v29
     w108 = "close"
-    a106 = "wait"
-    a105 = w4[a106]
-    w10 = 37
+    v83 = "wait"
+    v82 = taskLib[v83]
+    state = 37
     w121 = w84
-    a122 = a119[48]
-    a123 = L7
-    a123 = a123()
+    v94 = v92[48]
+    v95 = L7
+    v95 = v95()
     w124 = 1
-    w121(a122, a123, w124, w125)
-    w121 = a119[3]
+    w121(v94, v95, w124, w125)
+    w121 = v92[3]
     w101[49] = w51
     w120 = 20
-    w125 = a119[61]
-    w101[74] = a115
+    w125 = v92[61]
+    w101[74] = v90
     w125 = w84
-    a126 = L7
-    a126 = a126()
-    a127 = a119[61]
-    a122 = 62
-    a132 = a119
-    a133 = "X"
-    w10 = 112
+    b2 = L7
+    b2 = b2()
+    b3 = v92[61]
+    v94 = 62
+    v99 = v92
+    v100 = "X"
+    state = 112
     w37 = w1[5]
-    a38 = w1[5]
+    v26 = w1[5]
     w39 = w1[5]
     w40 = w1[5]
-    w10 = 31
-    if not ((217 >= a123)) then
-        w125 = a119; w124 = a119["GetChildren"]
-        w124, w125, a126, a127 = w124(w125, a126)
+    state = 31
+    if not ((217 >= v95)) then
+        w125 = v92; w124 = v92["GetChildren"]
+        w124, w125, b2, b3 = w124(w125, b2)
         -- generic-for iterator (coroutine desugar) reg R124
         repeat
         until not ((w120 > 50))
     end
-    w124 = a117
+    w124 = v91
     w125 = "Folder"
     w124 = w124(w125)
-    a119 = w124
-    a123 = a119
+    v92 = w124
+    v95 = v92
     w124 = 962686649
-    a123 = a123(w124)
-    w121 = a123
-    a122 = 99
-    a133 = 0
-    a68 = "tostring"
-    w65 = w20[a68]
-    w10 = 64
-    a137 = a119
-    a138 = "X"
-    a138 = a132[a138]
-    a127 = w97
+    v95 = v95(w124)
+    w121 = v95
+    v94 = 99
+    v100 = 0
+    v55 = "tostring"
+    w65 = t7[v55]
+    state = 64
+    fn10 = v92
+    v103 = "X"
+    v103 = v99[v103]
+    b3 = w97
     w125 = w84
-    a126 = L7
-    a126 = a126()
-    a127 = a119[36]
-    a131 = a57
-    a131 = a131()
-    a132, a133 = nil
+    b2 = L7
+    b2 = b2()
+    b3 = v92[36]
+    v98 = v44
+    v98 = v98()
+    v99, v100 = nil
     -- generic-for iterator (coroutine desugar) reg R131
     w124 = w118
-    w125 = a119
-    a126 = "Folder"
-    w124(w125, a126)
-    a123 = w84
+    w125 = v92
+    b2 = "Folder"
+    w124(w125, b2)
+    v95 = w84
     w125 = w121; w124 = w121["NextNumber"]
     w124 = w124(w125)
     w125 = 0.490891385082238
-    a126 = true
-    a123(w124, w125, a126, a127)
-    a122 = 13
+    b2 = true
+    v95(w124, w125, b2, b3)
+    v94 = 13
     w108 = w97
-    a109 = a94
+    v86 = fn1
     w110 = "unpack"
-    w108(a109, w110)
-    w10 = 57
+    w108(v86, w110)
+    state = 57
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[26]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[26]
     w124 = 1
-    w121(a122, a123, w124, w125)
-    w10 = 47
-    w10 = 75
-    a130 = a130[a131]
-    a130 = (a130 * 100)
-    a130 = (a130 // 1)
+    w121(v94, v95, w124, w125)
+    state = 47
+    state = 75
+    b5 = b5[v98]
+    b5 = (b5 * 100)
+    b5 = (b5 // 1)
     w101[91] = w80
-    a122 = 123
+    v94 = 123
     w125 = w97
-    a126 = "IsServer"
-    a126 = a119[a126]
+    b2 = "IsServer"
+    b2 = v92[b2]
     while true do
         w121 = "The metatable is locked"
-        a122 = w48
-        a123 = a119
+        v94 = w48
+        v95 = v92
     end
     w120 = w83
-    a132 = 124
+    v99 = 124
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[54]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[54]
     w124 = 1
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w120 = 16
-    a53 = "traceback"
-    a53 = a49[a53]
+    k6 = "traceback"
+    k6 = v37[k6]
     w54 = w1[5]
-    a103 = w97
-    a104 = w12
-    a105 = "match"
-    a103(a104, a105)
+    fn3 = w97
+    fn4 = w12
+    v82 = "match"
+    fn3(fn4, v82)
     while true do
-        a133 = true
-        a130(a131, a132, a133, a134)
+        v100 = true
+        b5(v98, v99, v100, b6)
         w125 = 42
     end
-    w125(a126, a127, a128, a129)
-    a132 = a129
+    w125(b2, b3, b4, v97)
+    v99 = v97
     if (w120 ~= 29) then
     else
         w120 = 88
-        w121 = a119[54]
+        w121 = v92[54]
         w101[46] = w75
     end
     w111(w112)
-    w10 = 72
-    a123 = w83
+    state = 72
+    v95 = w83
     w125 = w121; w124 = w121["NextInteger"]
-    a126 = 748
-    if not ((a122 ~= 64)) then
-        a123 = a117
+    b2 = 748
+    if not ((v94 ~= 64)) then
+        v95 = v91
         w124 = "Frame"
-        a123 = a123(w124)
-        w121 = a123
-        a123 = a114
+        v95 = v95(w124)
+        w121 = v95
+        v95 = fn6
         w124 = 0
     end
-    a122 = 101
-    a130 = a129[0]
-    a131 = "Scale"
-    a130 = a130[a131]
+    v94 = 101
+    b5 = v97[0]
+    v98 = "Scale"
+    b5 = b5[v98]
     while true do
-        a139 = 0
-        a140 = 7
-        a136 = a136(a137, a138, a139, a140)
-        a137 = a114
-        a138 = 0
+        v105 = 7
+        v102 = v102(fn10, v103, v104, v105)
+        fn10 = fn6
+        v103 = 0
     end
-    a138 = -8
+    v103 = -8
     w125 = w97
-    a126 = "FromName"
-    a126 = a123[a126]
-    a127 = "FromName"
-    w125(a126, a127)
+    b2 = "FromName"
+    b2 = v95[b2]
+    b3 = "FromName"
+    w125(b2, b3)
     w124 = 80
-    a136 = a114
-    a137 = 0
-    a138 = 4
-    a139 = 0
-    w20 = buffer
-    w10 = 13
-    a123 = nil
+    v102 = fn6
+    fn10 = 0
+    v103 = 4
+    t7 = buffer
+    state = 13
+    v95 = nil
     w124 = w1[5]
     w125 = nil
-    a126 = w1[5]
-    w10 = 39
-    a123 = a123()
+    b2 = w1[5]
+    state = 39
+    v95 = v95()
     w124 = 1
-    w121(a122, a123, w124, w125)
-    w121 = a119[30]
-    a127 = w84
-    a128 = 0.09719103083780782
-    a130 = w121; a129 = w121["NextNumber"]
-    a129 = a129(a130)
-    a130 = true
-    a127(a128, a129, a130, a131)
-    a127 = w83
-    a129 = w121; a128 = w121["NextInteger"]
-    a130 = 587
-    a131 = 618
-    a128 = a128(a129, a130, a131)
-    w121 = a119[13]
-    w101[27] = a76
+    w121(v94, v95, w124, w125)
+    w121 = v92[30]
+    b3 = w84
+    b4 = 0.09719103083780782
+    b5 = w121; v97 = w121["NextNumber"]
+    v97 = v97(b5)
+    b5 = true
+    b3(b4, v97, b5, v98)
+    b3 = w83
+    v97 = w121; b4 = w121["NextInteger"]
+    b5 = 587
+    v98 = 618
+    b4 = b4(v97, b5, v98)
+    w121 = v92[13]
+    w101[27] = v62
     w120 = 67
-    if (a132 ~= 66) then
-        a133 = a119
-        a134 = "X"
-        a134 = a127[a134]
-        a135 = true
-        a133(a134, a135)
+    if (v99 ~= 66) then
+        v100 = v92
+        b6 = "X"
+        b6 = b3[b6]
+        v101 = true
+        v100(b6, v101)
     end
     w121 = w84
-    a122 = a119[55]
-    a123 = L7
-    a102 = w97
-    a103 = w45
-    a104 = "pcall"
-    a102(a103, a104)
-    w10 = 101
-    a127 = w55
-    a127()
+    v94 = v92[55]
+    v95 = L7
+    fn2 = w97
+    fn3 = w45
+    fn4 = "pcall"
+    fn2(fn3, fn4)
+    state = 101
+    b3 = w55
+    b3()
     w120 = 95
     w121 = w84
-    a122 = a119[13]
-    a123 = L7
-    a127 = a123; a126 = a123["GetPositionOnCurve"]
-    a128 = 0.46666666865348816
-    a126 = a126(a127, a128)
-    w125 = a126
-    a131[2950335024] = w309
-    a131[945981900] = w223
-    a131[2716838150] = w296
-    a131[2691622896] = a133
-        -- (constant test eliminated: if (w10 ~= 78) then)
-    w111 = a35
-    w112 = a32
-    a113 = w110
-    w112 = w112(a113)
-    a113 = 1
-    w111(w112, a113)
-    w111 = a76
+    v94 = v92[13]
+    v95 = L7
+    b3 = v95; b2 = v95["GetPositionOnCurve"]
+    b4 = 0.46666666865348816
+    b2 = b2(b3, b4)
+    w125 = b2
+    v98[2950335024] = v120
+    v98[945981900] = v114
+    v98[2716838150] = v119
+    v98[2691622896] = v100
+        -- (constant test eliminated: if (state ~= 78) then)
+    w111 = v23
+    w112 = v22
+    v89 = w110
+    w112 = w112(v89)
+    v89 = 1
+    w111(w112, v89)
+    w111 = v62
     w112 = w93
     w111(w112)
     w125 = w84
-    a126 = w118[2]
-    a127 = L7
-    a127 = a127()
-    a128 = 2
-    w125(a126, a127, a128, a129)
-        -- (constant test eliminated: if (w10 >= 85) then)
+    b2 = w118[2]
+    b3 = L7
+    b3 = b3()
+    b4 = 2
+    w125(b2, b3, b4, v97)
+        -- (constant test eliminated: if (state >= 85) then)
     w124 = L10
     w124()
     w121 = 16
-    a122 = 95
-    a123 = 15
+    v94 = 95
+    v95 = 15
     w125 = w84
-    a126 = a119[21]
-    a127 = L7
-    a127 = a127()
-    a128 = 1
-    w125(a126, a127, a128, a129)
+    b2 = v92[21]
+    b3 = L7
+    b3 = b3()
+    b4 = 1
+    w125(b2, b3, b4, v97)
     w124 = true
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w121 = w97
-    a122 = "IsA"
-    a122 = w120[a122]
-    a123 = "IsA"
-    w121(a122, a123)
+    v94 = "IsA"
+    v94 = w120[v94]
+    v95 = "IsA"
+    w121(v94, v95)
     w125 = w84
-    a126 = L7
-    a126 = a126()
-    a127 = a119[10]
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    a128 = 1
-    w125(a126, a127, a128, a129)
-    w125(a126, a127, a128, a129)
+    b2 = L7
+    b2 = b2()
+    b3 = v92[10]
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    b4 = 1
+    w125(b2, b3, b4, v97)
+    w125(b2, b3, b4, v97)
         -- (constant test eliminated: if not ((90 >= w120)) then)
             -- (constant test eliminated: if not ((w120 >= 109)) then)
             w120 = 39
             w121 = w84
-            a122 = a119[2]
-            a123 = L7
-    w10 = 122
-    while true do -- (empty spin loop: unrestructured dispatcher exit)
-    end
-    a123 = w112
-    w124 = w24
+            v94 = v92[2]
+            v95 = L7
+    state = 122
+    -- (empty spin loop: dispatcher exit the structurer could not
+    --  recover; commented out -- it can never terminate on its own)
+    -- while true do
+    -- end
+    v95 = w112
+    w124 = v16
     w125 = w1[5]
-    a123(w124, w125)
-    a122 = 64
-    a123 = a117
+    v95(w124, w125)
+    v94 = 64
+    v95 = v91
     w124 = "ScreenGui"
-    a123 = a123(w124)
-    w120 = a123
+    v95 = v95(w124)
+    w120 = v95
     w120 = 31
-    w82 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, ...) -- F283
-        local L217, L419
-        a3 = w1[5]
-        a4 = w1[5]
-        a5 = 118
-        a6 = 180
-        a7 = 62
+    w82 = function(v1, v2, k1, v3, v4, i1, i2, v5, a9, a10, ...) -- F283
+        local v6, v7
+        k1 = w1[5]
+        v3 = w1[5]
+        v4 = 118
+        i1 = 180
+        i2 = 62
         do -- (terminates control flow)
-            a3 = a5
-            a3 = (not a3)
-            a5 = a3
-            do return a5 end
+            k1 = v4
+            k1 = (not k1)
+            v4 = k1
+            do return v4 end
         end
-        a3 = w80
+        k1 = w80
         while true do
-            a5 = a3
-            a6 = a4
-            a7 = a2
-            a5 = a5(a6, a7)
+            v4 = k1
+            i1 = v3
+            i2 = v2
+            v4 = v4(i1, i2)
         end
-        L419 = L217[0]
-        a4 = a1
+        v3 = v1
     end
     w111 = w1[5]
     w112 = 33
-    a113 = 156
-    a114 = 123
+    v89 = 156
+    fn6 = 123
     while true do
         w124()
     end
-    a119 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, ...) -- F473
-        local L112, L417, L469
-        a1 = w77
-        a2 = w66
-        a3 = w58
-        a1, a2, a3 = a1(a2, a3, a4)
-        a3 = UPVALS[a3]
-        a4 = 8
-        a3 = a3(a4)
-        a4 = w64
-        a5 = a3
-        a6 = 0
-        a7 = a1
-        a4(a5, a6, a7, a8)
-        a4 = 104
+    v92 = function(fn1, v1, v2, fn2, fn3, fn4, fn5, v3, v4, a10, ...) -- F473
+        local v5, v6, v7
+        fn1 = w77
+        v1 = w66
+        v2 = w58
+        fn1, v1, v2 = fn1(v1, v2, fn2)
+        v2 = UPVALS[v2]
+        fn2 = 8
+        v2 = v2(fn2)
+        fn2 = w64
+        fn3 = v2
+        fn4 = 0
+        fn5 = fn1
+        fn2(fn3, fn4, fn5, v3)
+        fn2 = 104
         while true do
-            a5 = w64
-            a6 = a3
-            a7 = 4
-            a8 = a2
-            a5(a6, a7, a8, a9)
-            a4 = 39
+            fn3 = w64
+            fn4 = v2
+            fn5 = 4
+            v3 = v1
+            fn3(fn4, fn5, v3, v4)
+            fn2 = 39
         end
         while true do
             -- table.move range
-            do return a5 end
+            do return fn3 end
         end
-        a6(a7, a8, a9, a10)
-            -- (constant test eliminated: if (104 > a4) then)
-            a5 = {}
-            a6 = UPVALS[a5]
-            a7 = w65
-            a8 = a3
-            a7 = a7(a8)
-            a8 = 1
-            a9 = -1
+        fn4(fn5, v3, v4, a10)
+            -- (constant test eliminated: if (104 > fn2) then)
+            fn3 = {}
+            fn4 = UPVALS[fn3]
+            fn5 = w65
+            v3 = v2
+            fn5 = fn5(v3)
+            v4 = -1
     end
-    a119 = a119()
+    v92 = v92()
     w120 = w1[5]
     w121 = w1[5]
-    a122 = nil
-    w10 = 57
+    v94 = nil
+    state = 57
     w124 = L7
     w125 = 0
-    w10 = 126
-    a114 = UDim2.new
-    w10 = 100
-    a113 = game
-    w10 = 48
+    state = 126
+    fn6 = UDim2.new
+    state = 100
+    v89 = game
+    state = 48
     w101 = w97
-    a102 = w28
-    a103 = "select"
-    w101(a102, a103)
-    w10 = 108
-        -- (constant test eliminated: if not ((91 >= w10)) then)
+    fn2 = k3
+    fn3 = "select"
+    w101(fn2, fn3)
+    state = 108
+        -- (constant test eliminated: if not ((91 >= state)) then)
         w101 = w97
-        a102 = w15
-        a103 = "xpcall"
-        w101(a102, a103)
-        w10 = 91
-    w90 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, ...) -- F609
-        local L471, L503
-        a2 = w1[5]
-        a3 = nil
-        a4 = 21
-        a5 = 184
-        a6 = 37
-        a27 = (a19 * 403)
-        a28 = (a18 * a21)
-        a22 = (a27 + a28)
-        a23 = (a22 * 65536)
-        a23 = (a23 + a20)
-        a2 = (a23 % 4294967296)
+        fn2 = w15
+        fn3 = "xpcall"
+        w101(fn2, fn3)
+        state = 91
+    w90 = function(v1, n1, v2, i1, i2, i3, n2, i4, fn1, i5, v3, v4, i6, i7, i8, n3, v5, n4, v6, v7, v8, v9, i9, i10, i11, n5, n6, v10, a29, a30, ...) -- F609
+        local v11, v12
+        n1 = w1[5]
+        v2 = nil
+        i1 = 21
+        i2 = 184
+        i3 = 37
+        n6 = (v6 * 403)
+        v10 = (n4 * v8)
+        v9 = (n6 + v10)
+        i9 = (v9 * 65536)
+        i9 = (i9 + v7)
+        n1 = (i9 % 4294967296)
         do -- (terminates control flow)
-            a4 = bit32.bxor(a2, 320281964)
-            do return a4 end
+            i1 = bit32.bxor(n1, 320281964)
+            do return i1 end
         end
-        a8 = 1
-        a9 = (#a3)
-        a10 = 1
-            -- (constant test eliminated: if (a26 ~= 53) then)
-        a17 = (a2 * 16777619)
-        a2 = (a17 % 4294967296)
-        a9(a10, a11, a12, a13)
+        i4 = 1
+        fn1 = (#v2)
+        i5 = 1
+        if (n5 ~= 53) then
+        end
+        v5 = (n1 * 16777619)
+        n1 = (v5 % 4294967296)
+        fn1(i5, v3, v4, i6)
         -- table.move range
-        a3 = a8
-        a10 = a1
-        a11 = 1
-        a12 = -1
-        a22 = w1[5]
-        a23 = 7
-        a24 = 174
-        a25 = 46
-        a18 = (a2 % 65536)
-        a2 = 2166136261
-        a8 = {}
-        a9 = w17
+        v2 = i4
+        i5 = v1
+        v4 = -1
+        v9 = w1[5]
+        i9 = 7
+        i10 = 174
+        i11 = 46
+        n4 = (n1 % 65536)
+        n1 = 2166136261
+        i4 = {}
+        fn1 = w17
         repeat
-        until not ((a16 > 94))
-        a12 = a3[a11]
-        a2 = bit32.bxor(a2, a12)
-        a18 = w1[5]
-        a19 = w1[5]
-        a20 = w1[5]
-        a21 = w1[5]
-        a12 = w1[5]
-        a13 = 94
-        a14 = 266
-        a15 = 55
-        a27 = (a2 - a18)
-        a19 = (a27 / 65536)
-        a20 = (a18 * 403)
-        a21 = 256
+        until not ((n3 > 94))
+        v4 = v2[v3]
+        n1 = bit32.bxor(n1, v4)
+        n4 = w1[5]
+        v6 = w1[5]
+        v7 = w1[5]
+        v8 = w1[5]
+        v4 = w1[5]
+        i6 = 94
+        i7 = 266
+        i8 = 55
+        n6 = (n1 - n4)
+        v6 = (n6 / 65536)
+        v7 = (n4 * 403)
     end
-    a91 = w1[5]
+    v75 = w1[5]
     w92 = w1[5]
     w93 = w1[5]
-    w10 = 82
-    a130 = "X"
-    a130 = a129[a130]
-    a131 = "Scale"
-    w26 = "rep"
-    w26 = w5[w26]
+    state = 82
+    b5 = "X"
+    b5 = v97[b5]
+    v98 = "Scale"
+    k2 = "rep"
+    k2 = stringLib[k2]
     w27 = {}
     w125 = w84
-    a126 = L7
-    a126 = a126()
-    a127 = w118[16]
-    a128 = 2
+    b2 = L7
+    b2 = b2()
+    b3 = w118[16]
+    b4 = 2
     w121 = 21
-    a122 = 556
-    a123 = 107
+    v94 = 556
+    v95 = 107
     while true do
-        a126 = a119
-        a127 = w124
-        a128 = true
+        b2 = v92
+        b3 = w124
+        b4 = true
     end
-    a122 = 111
+    v94 = 111
     w121 = w83
-    a122 = "The metatable is locked"
-    a123 = w48
+    v94 = "The metatable is locked"
+    v95 = w48
     w124 = w120
-    a123 = a123(w124)
-    w121 = a119[23]
-    w101[53] = a35
+    v95 = v95(w124)
+    w121 = v92[23]
+    w101[53] = v23
     w120 = 80
-    a103 = w97
-    a104 = w17
-    a105 = "byte"
-    a132 = (w121 + a126)
-    a130 = a130(a131, a132)
-    a127 = a130
-    a130 = (a126 % 8)
-    a130 = (a130 + 1)
-    a128 = a119[a130]
-    a130 = w61
-    a131 = a122
-    a132 = (w121 + a126)
-    a133 = bit32.bxor(a127, a128)
-    a130(a131, a132, a133, a134)
-    a49 = w2
+    fn3 = w97
+    fn4 = w17
+    v82 = "byte"
+    v99 = (w121 + b2)
+    b5 = b5(v98, v99)
+    b3 = b5
+    b5 = (b2 % 8)
+    b5 = (b5 + 1)
+    b4 = v92[b5]
+    b5 = w61
+    v98 = v94
+    v99 = (w121 + b2)
+    v100 = bit32.bxor(b3, b4)
+    b5(v98, v99, v100, b6)
+    v37 = v2
     w50 = debug
     w51 = "The debug library is required on Luau platforms. Please open a support ticket."
-    a49 = a49(w50, w51)
-    w50 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, ...) -- F498
-        local L23, L181
-        a2 = w1[5]
-        a3 = w1[5]
-        a4 = 102
-        a3 = a1
+    v37 = v37(w50, w51)
+    w50 = function(v1, v2, k1, n1, i1, i2, i3, n2, v3, a10, a11, ...) -- F498
+        local v4, v5
+        v2 = w1[5]
+        k1 = w1[5]
+        n1 = 102
+        k1 = v1
         do -- (terminates control flow)
             do return  end
         end
         while true do
-            a5 = 103
-            a6 = 257
-            a7 = 69
-            if not ((103 >= a8)) then
-                if not ((a8 ~= 172)) then
-                    a2 = (not a2)
-                end
-                a9 = a2
-                do return a9 end
-            end
+            i1 = 103
+            i2 = 257
+            i3 = 69
+                -- (constant test eliminated: if not ((103 >= n2)) then)
+                v3 = v2
+                do return v3 end
         end
-        a3 = (not a3)
-        a2 = w27
-        a4 = 13
-        a2 = a2[a3]
+        k1 = (not k1)
+        v2 = w27
+        n1 = 13
+        v2 = v2[k1]
     end
     w51 = w1[5]
     w52 = w1[5]
-    a128 = "Parent"
-    w121[a128] = w120
-    if (a126 > 163) then
+    b4 = "Parent"
+    w121[b4] = w120
+    if (b2 > 163) then
     end
-    w121 = a119[55]
-    w101[21] = a49
+    w121 = v92[55]
+    w101[21] = v37
     w120 = 98
-    a129 = w121[a129]
-    a127(a128, a129)
+    v97 = w121[v97]
+    b3(b4, v97)
         -- (constant test eliminated: if (w120 >= 56) then)
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = w118[17]
+    v94 = L7
+    v94 = v94()
+    v95 = w118[17]
     w124 = 2
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w121 = w118[16]
     w101[5] = w3
-    a117 = a117(w118, a119)
-    w116 = w116(a117)
+    v91 = v91(w118, v92)
+    w116 = w116(v91)
     w15 = w1[11]
-    w10 = 11
-    a131 = a132
+    state = 11
+    v98 = v99
     w121 = w84
-    a122 = L7
-    a122 = a122()
-    a123 = a119[50]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[50]
     w124 = 1
-    a138 = a123; a137 = a123["GetTangentOnCurveArcLength"]
-    a139 = 0.75
-    a137 = a137(a138, a139)
-    a76 = function(a1, a2, a3, a4, a5, a6, ...) -- F303
-        local L480
-        a2 = w61
-        a3 = w66
-        a4 = w58
-        a5 = (a1 % 256)
-        a2(a3, a4, a5, a6)
-        a2 = w58
-        a2 = (a2 + 1)
-        w58 = a2
+    v103 = v95; fn10 = v95["GetTangentOnCurveArcLength"]
+    fn10 = fn10(v103, v104)
+    v62 = function(v1, fn1, v2, v3, v4, a6, ...) -- F303
+        local v5
+        fn1 = w61
+        v2 = w66
+        v3 = w58
+        v4 = (v1 % 256)
+        fn1(v2, v3, v4, a6)
+        fn1 = w58
+        fn1 = (fn1 + 1)
+        w58 = fn1
         do return  end
     end
-    w10 = 0
-    a127 = w1[5]
-    a128 = w1[5]
-    a129 = 1
-    a68 = "writeu8"
-    w61 = w20[a68]
-    w10 = 76
+    state = 0
+    b3 = w1[5]
+    b4 = w1[5]
+    v97 = 1
+    v55 = "writeu8"
+    w61 = t7[v55]
+    state = 76
     -- (junk op: register-file store with a decoded-at-runtime index)
-    a69 = Vector3
-    w10 = 88
-    a115 = w37
-    a114(a115)
-    a114 = w112
-    a115 = a42
-    a128 = L7
-    a128()
-    a119 = 78
-    a129 = 108
-    a130 = w46
-    a131 = a122
-    a53 = "info"
-    w51 = a49[a53]
-    w10 = 15
-    a119 = w1[111]
+    v56 = Vector3
+    state = 88
+    v90 = w37
+    fn6(v90)
+    fn6 = w112
+    v90 = v30
+    b4 = L7
+    b4()
+    v92 = 78
+    v97 = 108
+    b5 = w46
+    v98 = v94
+    k6 = "info"
+    w51 = v37[k6]
+    state = 15
+    v92 = w1[111]
     -- generic-for iterator (coroutine desugar) reg R124
-    w124, w125, a126 = coroutine.resume(w124, w125, a126)
+    w124, w125, b2 = coroutine.resume(w124, w125, b2)
     if w124 then
-        a126 = w55
-        a126()
+        b2 = w55
+        b2()
     end
-    a131 = {}
-    a131[4049439760] = w121
-    a131[124078634] = L588
-    a131[1259237318] = L728
-    a131[2423708338] = L376
-    a131[2855685826] = L716
-    a131[301381932] = L433
-    a130 = a119
-    a131 = "X"
-    a131 = a129[a131]
-    a132 = "Scale"
-    a131 = a131[a132]
-    a132 = true
-    a130(a131, a132)
-    a122 = 30
-    w111 = a76
+    v98 = {}
+    v98[4049439760] = w121
+    v98[124078634] = v280
+    v98[1259237318] = v420
+    v98[2423708338] = v127
+    v98[2855685826] = v408
+    v98[301381932] = v133
+    b5 = v92
+    v98 = "X"
+    v98 = v97[v98]
+    v99 = "Scale"
+    v98 = v98[v99]
+    v99 = true
+    b5(v98, v99)
+    v94 = 30
+    w111 = v62
     w112 = (w93 % 65536)
     w112 = (w93 - w112)
     w112 = (w112 / 65536)
-    a130 = w13
-    a131 = a128
-    a130 = a130(a131)
-    a131 = "function"
-    a123 = w84
+    b5 = w13
+    v98 = b4
+    b5 = b5(v98)
+    v98 = "function"
+    v95 = w84
     w124 = 0.2258909312414879
-    a126 = w121; w125 = w121["NextNumber"]
-    w125 = w125(a126)
-    a126 = true
-    a123(w124, w125, a126, a127)
-    w101[88] = L460
-    a133 = a119
-    a134 = "Y"
-    a134 = a127[a134]
-    a135 = true
-    a133(a134, a135)
-    a134 = a123; a133 = a123["GetTangentOnCurve"]
-    w125 = a119[16]
-    w101[79] = w25
+    b2 = w121; w125 = w121["NextNumber"]
+    w125 = w125(b2)
+    b2 = true
+    v95(w124, w125, b2, b3)
+    w101[88] = v153
+    v100 = v92
+    b6 = "Y"
+    b6 = b3[b6]
+    v101 = true
+    v100(b6, v101)
+    b6 = v95; v100 = v95["GetTangentOnCurve"]
+    w125 = v92[16]
+    w101[79] = v17
     w125 = w83
-    a126 = L7
-    a126 = a126()
-    a127 = a119[16]
-    a128 = 2
+    b2 = L7
+    b2 = b2()
+    b3 = v92[16]
+    b4 = 2
     w121 = w118[1]
     w101[12] = w121
     w120 = 11
-    a129 = w121
-    a127 = a127(a128, a129)
-    a128 = true
-    a123 = a123(w124)
-    w121 = a123
+    v97 = w121
+    b3 = b3(b4, v97)
+    b4 = true
+    v95 = v95(w124)
+    w121 = v95
     w33 = "cancel"
-    w30 = w4[w33]
+    v20 = taskLib[w33]
     w33 = "unpack"
-    a31 = w5[w33]
+    v21 = stringLib[w33]
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    w125 = a119[44]
-    w101[75] = L521
-    a106(w107, w108)
-    w10 = 59
-    a134 = a129[3]
-    a132[0] = a122
-    a134 = w36
-    a135 = a130
-    a136 = a126
-    a134(a135, a136)
-    a133 = 16
+    v94 = L7
+    v94 = v94()
+    w125 = v92[44]
+    w101[75] = v213
+    v83(w107, w108)
+    state = 59
+    b6 = v97[3]
+    v99[0] = v94
+    b6 = w36
+    v101 = b5
+    v102 = b2
+    b6(v101, v102)
+    v100 = 16
     repeat
-    until not ((77 >= w10))
-    a122 = 26
+    until not ((77 >= state))
+    v94 = 26
     w48 = w1[43]
     w125 = w84
-    a126 = w118[6]
-    a127 = L7
-    a127 = a127()
-    a128 = 2
+    b2 = w118[6]
+    b3 = L7
+    b3 = b3()
+    b4 = 2
     w125 = w84
-    a126 = L7
-    a126 = a126()
-    a127 = v3
-    a127 = a127()
-    a123 = a127
+    b2 = L7
+    b2 = b2()
+    b3 = v3
+    b3 = b3()
+    v95 = b3
     w124 = 97
-    w10 = 90
-    w121 = a119[a119]
+    state = 90
+    w121 = v92[v92]
     w101[58] = w61
     w120 = 104
-    a130 = a119
-    a131 = a129[0]
-    a132 = "Scale"
-    a137 = (a137 // 1)
-    w101[97] = a123
+    b5 = v92
+    v98 = v97[0]
+    v99 = "Scale"
+    fn10 = (fn10 // 1)
+    w101[97] = v95
     w125 = w84
-    a126 = L7
-    a126 = a126()
-    a127 = a119[1]
-    w80 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, ...) -- F452
-        a3 = w1[5]
-        a4 = nil
-        a5 = 66
-        a6 = 294
-        a7 = 57
-        a9 = w1[5]
-        a10 = 37
-        a3 = (a4 == a9)
-        a4 = a1
-        a7 = false
-        a6 = 80
-        a6 = 111
-        a3[a4] = a5
-        a3[a4] = a5
-            -- (constant test eliminated: if not ((a11 >= 343)) then)
-        a4 = a2
-        a10 = w1[5]
-        a3 = (a4 == a10)
-        a9 = 83
-            -- (constant test eliminated: if not ((66 >= a9)) then)
-                -- (constant test eliminated: if not ((68 >= a9)) then)
-                a10 = 103
-                    -- (constant test eliminated: if not ((a10 == 26)) then)
-                    a10 = 26
-                    a3 = true
-                a11 = a3
-                do return a11 end
-        a9 = 68
-        a4 = a2
-        a3 = a7
-        a3 = w75
-        a6 = 2
-        a4 = a2
-        a3 = a3[a4]
-        a10 = a3
-        a11 = a4
-        a10 = a10(a11)
-        repeat
-        until not ((a8 >= 180))
-        a4 = a1
-        a9 = a3
-        a10 = a4
-        a9 = a9(a10)
-        a3 = a9
-        a9 = 57
-        a3 = w50
-        a3 = UPVALS[a2]
-        a3 = w75
-            -- (constant test eliminated: if (22 >= a6) then)
-            a6 = 125
-            a5 = true
-            if (a8 >= 237) then
-                a3 = w50
-                a4 = a1
-            else
+    b2 = L7
+    b2 = b2()
+    b3 = v92[1]
+    w80 = function(v1, v2, v3, v4, i1, n1, i2, n2, v5, v6, n3, a12, a13, ...) -- F452
+        v3 = w1[5]
+        v4 = nil
+        i1 = 66
+        n1 = 294
+        i2 = 57
+        if (n3 >= 242) then
+        end
+        v5 = w1[5]
+        v3 = (v4 == v5)
+        v4 = v1
+        i2 = false
+        n1 = 80
+        n1 = 111
+        v3[v4] = i1
+        v3[v4] = i1
+        if not ((n3 >= 343)) then
+            if not ((141 >= n3)) then
+                i1 = w1[5]
             end
-        a5 = w1[5]
-        a6 = 22
-        a9 = 66
-        while true do -- (empty spin loop: unrestructured dispatcher exit)
         end
-        a3 = a10
+        v4 = v2
+        v6 = w1[5]
+        v3 = (v4 == v6)
+            -- (constant test eliminated: if not ((66 >= v5)) then)
+                -- (constant test eliminated: if not ((68 >= v5)) then)
+                if not ((v6 == 26)) then
+                    v3 = true
+                end
+                n3 = v3
+                do return n3 end
+        v4 = v2
+        v3 = i2
+        v3 = w75
+        n1 = 2
+        v4 = v2
+        v3 = v3[v4]
+        v6 = v3
+        n3 = v4
+        v6 = v6(n3)
+        repeat
+        until not ((n2 >= 180))
+        v4 = v1
+        v5 = v3
+        v6 = v4
+        v5 = v5(v6)
+        v3 = v5
+        v3 = w50
+        v3 = UPVALS[v2]
+        v3 = w75
+            -- (constant test eliminated: if (22 >= n1) then)
+            n1 = 125
+            i1 = true
+        i1 = w1[5]
+        n1 = 22
+        -- (empty spin loop: dispatcher exit the structurer could not
+        --  recover; commented out -- it can never terminate on its own)
+        -- while true do
+        -- end
+        v3 = v6
         do -- (terminates control flow)
-            a8 = a3
-            do return a8 end
+            n2 = v3
+            do return n2 end
         end
         do -- (terminates control flow)
-            a3 = false
-            a10 = a3
-            do return a10 end
+            v3 = false
+            v6 = v3
+            do return v6 end
         end
-        if not ((a10 >= 64)) then
-            a4 = a1
-            a9 = w1[5]
-            a10 = 64
+        if not ((v6 >= 64)) then
+            v4 = v1
+            v5 = w1[5]
         end
     end
-    a81 = w1[5]
+    v66 = w1[5]
     w82 = w1[5]
-    w10 = 92
-    w25 = Instance
+    state = 92
+    v17 = Instance
     w125 = w84
-    a126 = L7
-    a126 = a126()
-    a127 = w118[15]
-    a128 = 2
-    w125(a126, a127, a128, a129)
+    b2 = L7
+    b2 = b2()
+    b3 = w118[15]
+    b4 = 2
+    w125(b2, b3, b4, v97)
     w125 = w118[17]
     w101[4] = w107
-    a129 = w37
-    a130 = 481249152
-    a129 = a129(a130)
-    w124 = a129
-    w121 = a119
-    a123 = (a119 / 2)
-    w124 = (a119 / 4)
-    w125 = a119[52]
-    w101[20] = w29
-    a114 = w112
-    a115 = w36
-    a114(a115)
-    a114 = w112
-    a115 = a70
-    a114(a115)
-    a114 = w112
-    a106 = w97
-    w107 = a38
+    v97 = w37
+    b5 = 481249152
+    v97 = v97(b5)
+    w124 = v97
+    w121 = v92
+    v95 = (v92 / 2)
+    w124 = (v92 / 4)
+    w125 = v92[52]
+    w101[20] = v19
+    fn6 = w112
+    v90 = w36
+    fn6(v90)
+    fn6 = w112
+    v90 = v57
+    fn6(v90)
+    fn6 = w112
+    v83 = w97
+    w107 = v26
     w108 = "status"
-    a127 = w83
-    a128 = a113
-    a129 = "Parent"
-    a133 = (w124 * a127)
-    a133 = (a133 + w92)
-    a127 = (a133 % 256)
+    b3 = w83
+    b4 = v89
+    v97 = "Parent"
+    v100 = (w124 * b3)
+    v100 = (v100 + w92)
+    b3 = (v100 % 256)
     while true do
         -- (junk op: register-file store with a decoded-at-runtime index)
-        a127 = a119[49]
+        b3 = v92[49]
     end
     w125 = w118[13]
-    w101[10] = a31
-    a126 = L7
-    a139 = 1
-    a140 = 0
-    a141 = -8
-    a134 = a134(a135, a136, a137(a138, a139, a140, a141, a142))
-    a135 = w24
+    w101[10] = v21
+    b2 = L7
+    v105 = 0
+    v106 = -8
+    b6 = b6(v101, v102, fn10(v103, v104, v105, v106, v107))
+    v101 = v16
     w107 = nil
-    w10 = 113
+    state = 113
     w121 = w83
-    a122 = L7
-    a122 = a122()
-    a123 = a119[43]
+    v94 = L7
+    v94 = v94()
+    v95 = v92[43]
     w124 = 1
-    w121(a122, a123, w124, w125)
+    w121(v94, v95, w124, w125)
     w120 = 109
-    a57 = "wrap"
-    a56 = w6[a57]
-    a57 = getfenv
+    v44 = "wrap"
+    v43 = t4[v44]
+    v44 = getfenv
     w58 = 0
-    a59 = w1[5]
+    v46 = w1[5]
     w60 = w1[5]
     w61 = w1[5]
-    a62 = w1[5]
+    v49 = w1[5]
     w63 = nil
     w64 = w1[5]
     w65 = nil
     w66 = w1[5]
-    a67 = w1[5]
-    w124 = w124(w125, a126, a127)
+    v54 = w1[5]
+    w124 = w124(w125, b2, b3)
     w125 = 526
-    a126 = true
-    a123(w124, w125, a126, a127)
-    a122 = 76
-    a126 = 296
-    a127 = 1020
-    w124 = w124(w125, a126, a127)
+    b2 = true
+    v95(w124, w125, b2, b3)
+    v94 = 76
+    b2 = 296
+    b3 = 1020
+    w124 = w124(w125, b2, b3)
     w125 = 692
-    a128 = (a128 * 100)
-    a128 = (a128 // 1)
+    b4 = (b4 * 100)
+    b4 = (b4 // 1)
     w101[86] = w90
-    a128 = w121; a127 = w121["GetChildren"]
-    a127, a128, a129, a130 = a127(a128, a129)
+    b4 = w121; b3 = w121["GetChildren"]
+    b3, b4, v97, b5 = b3(b4, v97)
     -- generic-for iterator (coroutine desugar) reg R127
     do -- (terminates control flow)
-        a127 = function(a1, a2, q3, q4, q5, q6, a7, a8, a9, ...) -- F508
-            local q14, L16, L38, L73, L91, L411, L456, L511
-            a1 = {}
-            a2 = 46
-            q3 = 62
-            q4 = 8
-            a2 = 7
-            if not ((a2 ~= 58)) then
-                a2 = 81
-                q3 = function(a1, a2, a3, a4, a5, a6, a7, ...) -- F514
-                    local L280
-                    a4 = w1[176]
-                    a5 = w101[44]
-                    a6 = w101[93]
-                    a4 = a4(a5, a6)
-                    a5 = w101[89]
-                    a4 = (a4 < a5)
-                    if not ((not a4)) then
-                        a4 = w101[46]
+        b3 = function(t1, i1, i2, i3, n1, k1, a7, a8, a9, ...) -- F508
+            local v1, v2, v3, v4, v5, v6, v7, v8
+            t1 = {}
+            i1 = 46
+            i2 = 62
+            i3 = 8
+            i1 = 7
+            if not ((i1 ~= 58)) then
+                i1 = 81
+                i2 = function(a1, a2, a3, v1, n1, v2, a7, ...) -- F514
+                    local v3
+                    v1 = w1[176]
+                    n1 = w101[44]
+                    v2 = w101[93]
+                    v1 = v1(n1, v2)
+                    n1 = w101[89]
+                    v1 = (v1 < n1)
+                    if not ((not v1)) then
+                        v1 = w101[46]
                     end
-                    a4 = w101[31]
+                    v1 = w101[31]
                     repeat
-                    until not (a4)
+                    until not (v1)
                     do -- (terminates control flow)
-                        do return a4 end
+                        do return v1 end
                     end
                 end
-                a1[8] = L91
+                t1[8] = v5
             end
-            a2 = 58
-            q3 = function(a1, a2, a3, a4, a5, a6, a7, ...) -- F574
-                local L77, L288, L289
+            i1 = 58
+            i2 = function(a1, a2, fn1, n1, n2, a6, a7, ...) -- F574
+                local v1, v2, v3
                 do -- (terminates control flow)
-                    a3 = (-4294903594 + a3)
-                    do return a3 end
+                    fn1 = (-4294903594 + fn1)
+                    do return fn1 end
                 end
                 while true do
-                    a3 = w1[177]
-                    a4 = w101[1]
-                    a5 = w101[34]
-                    a4 = (a4 - a5)
-                    a5 = w101[86]
-                    a3 = a3(a4, a5)
+                    fn1 = w1[177]
+                    n1 = w101[1]
+                    n2 = w101[34]
+                    n1 = (n1 - n2)
+                    n2 = w101[86]
+                    fn1 = fn1(n1, n2)
                 end
             end
-            a1[7] = L38
-            L511 = (L456 < L411)
-            q6 = function(a1, a2, a3, a4, a5, a6, a7, a8, ...) -- F524
-                a5 = w101[16]
-                a6 = w101[1]
-                a5 = (a5 - a6)
-                a6 = w101[43]
-                a5 = (a5 - a6)
-                a5 = (135 + a5)
-                do return a5 end
+            t1[7] = v3
+            v8 = (v7 < v6)
+            k1 = function(a1, a2, a3, a4, n1, n2, a7, a8, ...) -- F524
+                n1 = w101[16]
+                n2 = w101[1]
+                n1 = (n1 - n2)
+                n2 = w101[43]
+                n1 = (n1 - n2)
+                n1 = (135 + n1)
+                do return n1 end
             end
-            a1[3] = q14
-            q6 = function(a1, a2, a3, a4, a5, a6, ...) -- F534
-                a3 = w101[74]
-                a4 = w101[12]
-                a3 = (a3 + a4)
-                a4 = w101[10]
-                a3 = (a3 == a4)
-                a3 = w101[22]
-                a3 = (31 + a3)
-                do return a3 end
-                a3 = w101[3]
+            t1[3] = v1
+            k1 = function(a1, a2, v1, z4, a5, a6, ...) -- F534
+                v1 = w101[74]
+                z4 = w101[12]
+                v1 = (v1 + z4)
+                z4 = w101[10]
+                v1 = (v1 == z4)
+                v1 = w101[22]
+                v1 = (31 + v1)
+                do return v1 end
+                v1 = w101[3]
             end
-            a1[4] = q6
-            q6 = function(a1, a2, a3, a4, a5, a6, a7, a8, ...) -- F544
-                a5 = w101[74]
-                a6 = w101[78]
-                a5 = (a5 - a6)
+            t1[4] = k1
+            k1 = function(a1, a2, a3, a4, n1, n2, a7, a8, ...) -- F544
+                n1 = w101[74]
+                n2 = w101[78]
+                n1 = (n1 - n2)
                 while true do
-                    a5 = (a5 - a6)
-                    a5 = (465 + a5)
-                    do return a5 end
+                    n1 = (n1 - n2)
+                    n1 = (465 + n1)
+                    do return n1 end
                 end
-                a6 = w101[12]
+                n2 = w101[12]
             end
-            a1[5] = q3
+            t1[5] = i2
             while true do
-                do return q3 end
+                do return i2 end
             end
-            q3 = a1
-            q6 = function(a1, a2, a3, a4, a5, a6, a7, a8, ...) -- F554
-                local L54, L458
-                a5 = w101[12]
-                a6 = w101[80]
-                a5 = (a5 + a6)
-                a6 = w101[10]
-                a5 = (a5 < a6)
-                a5 = w101[31]
-                if not (a5) then
-                    a5 = w101[37]
+            i2 = t1
+            k1 = function(a1, a2, a3, a4, n1, n2, a7, a8, ...) -- F554
+                local v1, v2
+                n1 = w101[12]
+                n2 = w101[80]
+                n1 = (n1 + n2)
+                n2 = w101[10]
+                n1 = (n1 < n2)
+                n1 = w101[31]
+                if not (n1) then
+                    n1 = w101[37]
                 end
-                a5 = (-137 + a5)
-                do return a5 end
+                n1 = (-137 + n1)
+                do return n1 end
             end
-            a1[2] = q6
-            a2 = 39
-            q3 = 113
-            q4 = 74
+            t1[2] = k1
+            i1 = 39
+            i2 = 113
+            i3 = 74
             while true do
-                if not ((q5 ~= 54)) then
-                    q6 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, ...) -- F564
-                        a5 = w1[168]
-                        a6 = w1[175]
-                        a7 = w101[74]
-                        a8 = w101[91]
-                        a6 = a6(a7, a8)
-                        a5 = a5(a6)
-                        a5 = (169 + a5)
-                        do return a5 end
+                if not ((n1 ~= 54)) then
+                    k1 = function(a1, a2, a3, a4, fn1, fn2, v1, v2, a9, ...) -- F564
+                        fn1 = w1[168]
+                        fn2 = w1[175]
+                        v1 = w101[74]
+                        v2 = w101[91]
+                        fn2 = fn2(v1, v2)
+                        fn1 = fn1(fn2)
+                        fn1 = (169 + fn1)
+                        do return fn1 end
                     end
-                    a1[6] = L73
+                    t1[6] = v4
                 end
             end
-            q6 = function(a1, a2, a3, a4, a5, a6, ...) -- F584
-                local L457
-                a3 = w101[89]
-                a4 = w101[55]
-                a3 = (a3 - a4)
-                a4 = w101[75]
-                a3 = (a3 <= a4)
-                if not ((not a3)) then
-                    a3 = w101[71]
+            k1 = function(a1, a2, n1, n2, a5, a6, ...) -- F584
+                local v1
+                n1 = w101[89]
+                n2 = w101[55]
+                n1 = (n1 - n2)
+                n2 = w101[75]
+                n1 = (n1 <= n2)
+                if not ((not n1)) then
+                    n1 = w101[71]
                 end
-                if a3 then
-                    a3 = (-86 + a3)
-                    do return a3 end
+                if n1 then
+                    n1 = (-86 + n1)
+                    do return n1 end
                 end
-                a3 = w101[80]
+                n1 = w101[80]
             end
-            a1[1] = L16
+            t1[1] = v2
         end
-        a127 = a127()
-        a127 = a123
-        do return a127 end
+        b3 = b3()
+        b3 = v95
+        do return b3 end
     end
-    a114 = w112
-    a115 = w12
-    a114(a115)
-    w10 = 111
-    w79 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, ...) -- F599
-        local L254, L255, L256
-        a3 = w1[5]
-        a4 = w1[5]
-        a5 = 65
+    fn6 = w112
+    v90 = w12
+    fn6(v90)
+    state = 111
+    w79 = function(v1, k1, v2, k2, n1, v3, v4, i1, n2, v5, i2, i3, i4, i5, state, fn1, v6, v7, v8, a20, ...) -- F599
+        local fn2, v9, v10
+        v2 = w1[5]
+        k2 = w1[5]
+        n1 = 65
         while true do
-            a6 = a3
-            a7 = a4
-            a6 = a6(a7)
-            a10 = 0
-            a11 = w58
-            a4 = w66
-            a12 = 89
-            a13 = 350
-            a14 = 69
-            while true do -- (empty spin loop: unrestructured dispatcher exit)
-            end
+            v3 = v2
+            v4 = k2
+            v3 = v3(v4)
+            i2 = w58
+            k2 = w66
+            i3 = 89
+            i4 = 350
+            i5 = 69
+            -- (empty spin loop: dispatcher exit the structurer could not
+            --  recover; commented out -- it can never terminate on its own)
+            -- while true do
+            -- end
         end
-        a3 = (a3 + a4)
-        w58 = a3
+        v2 = (v2 + k2)
+        w58 = v2
         do return  end
-        a3 = UPVALS[a2]
-        a5 = 44
-        a4 = 1
-        a3 = a2
-            -- (constant test eliminated: if not ((a15 >= 227)) then)
-            a3 = w58
-            -- (constant test eliminated: if not ((a15 >= 296)) then)
-        if (not a3) then
+        v2 = UPVALS[k1]
+        n1 = 44
+        k2 = 1
+        v2 = k1
+            -- (constant test eliminated: if not ((state >= 227)) then)
+            v2 = w58
+            -- (constant test eliminated: if not ((state >= 296)) then)
+        if (not v2) then
         end
-        a16(a17, a18, a19, a20)
-        a6 = 87
-        a16 = a3
-        a17 = a4
-        a18 = a11
-        a19 = a10
-        a3 = w61
-            -- (constant test eliminated: if (a14 ~= 109) then)
-        a3 = a6
-        a10 = w1[5]
-        a11 = 40
-        a12 = 142
-        a13 = 69
-        a5 = 27
-        a4 = a1
+        fn1(v6, v7, v8, a20)
+            -- (constant test eliminated: if not ((89 >= state)) then)
+            v2 = w55
+                -- (constant test eliminated: if not ((v3 ~= 74)) then)
+                v4 = v2
+                v4()
+                v4 = 136
+                i1 = 14
+        fn1 = v2
+        v6 = k2
+        v7 = i2
+        v8 = v5
+        v2 = w61
+            -- (constant test eliminated: if (i5 ~= 109) then)
+        v2 = v3
+        v5 = w1[5]
+        i2 = 40
+        i3 = 142
+        i4 = 69
+        n1 = 27
+        k2 = v1
     end
-    a137 = "X"
-    a137 = a132[a137]
-    a137 = (a137 * 100)
-    a122 = 44
-    a133 = a123; a132 = a123["GetTangentOnCurveArcLength"]
-    a134 = 0.46666666865348816
-    a132 = a132(a133, a134)
+    fn10 = "X"
+    fn10 = v99[fn10]
+    fn10 = (fn10 * 100)
+    v94 = 44
+    v100 = v95; v99 = v95["GetTangentOnCurveArcLength"]
+    b6 = 0.46666666865348816
+    v99 = v99(v100, b6)
     w124 = w124(w125)
     w125 = "Random"
-    a126 = true
-    a123(w124, w125, a126, a127)
-    a123 = w97
-    w10 = 68
+    b2 = true
+    v95(w124, w125, b2, b3)
+    v95 = w97
+    state = 68
     w124 = 450
     w125 = 57
-    w125 = function(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, ...) -- F619
-        local L0
-        a2 = a1[1]
-        a3 = a1[2]
-        if (a3 ~= "boolean") then
-            if not ((a3 ~= "string")) then
-                a4 = w17
-                a5 = a2
-                a6 = 1
-                a7 = 1
-                a4 = a4(a5, a6, a7)
-                a4 = (a4 ~= 0)
-                a5 = w17
-                a6 = a2
-                a7 = 2
-                a8 = 2
-                a5 = a5(a6, a7, a8)
-                a6 = w124
-                a6 = (a6 * a5)
-                a7 = w92
-                a6 = (a6 + a7)
-                a5 = (a6 % 256)
+    w125 = function(t1, v2, n1, v3, v4, v5, v6, i1, v7, v8, v9, v10, v11, v12, v13, a16, ...) -- F619
+        local v1
+        v2 = t1[1]
+        n1 = t1[2]
+        if (n1 ~= "boolean") then
+            if not ((n1 ~= "string")) then
+                v3 = w17
+                v4 = v2
+                v3 = v3(v4, v5, v6)
+                v3 = (v3 ~= 0)
+                v4 = w17
+                v5 = v2
+                i1 = 2
+                v4 = v4(v5, v6, i1)
+                v5 = w124
+                v5 = (v5 * v4)
+                v6 = w92
+                v5 = (v5 + v6)
+                v4 = (v5 % 256)
             end
-            a2 = (-a2)
-            a4 = 3
-            a5 = (#a1)
-            a6 = 3
+            v2 = (-v2)
+            v4 = (#t1)
         end
-        if not ((a10 > a11)) then
-            a12 = a7[a10]
-            a13 = (a10 + 1)
-            a13 = a7[a13]
+        if not ((v8 > v9)) then
+            v10 = v6[v8]
+            v11 = (v8 + 1)
+            v11 = v6[v11]
         end
-        a12 = a7[a10]
-        a7[a9] = a12
-        a9 = (a9 + 1)
-        a8 = (a9 - 1)
-        a8 = (#a7)
-        a2 = a7[1]
-        a8 = a1[a7]
-        a9 = (a7 + 1)
-        a9 = a1[a9]
-        a10 = (a7 + 2)
-        a10 = a1[a10]
-        a11 = a8[a10]
-        a11[a9] = a2
-        a11 = w116[a10]
-        a11 = a8[a11]
-        a11[a9] = L0
+        v10 = v6[v8]
+        v6[v7] = v10
+        v7 = (v7 + 1)
+        i1 = (v7 - 1)
+        i1 = (#v6)
+        v2 = v6[1]
+        i1 = t1[v6]
+        v7 = (v6 + 1)
+        v7 = t1[v7]
+        v8 = (v6 + 2)
+        v8 = t1[v8]
+        v9 = i1[v8]
+        v9[v7] = v2
+        v9 = w116[v8]
+        v9 = i1[v9]
+        v9[v7] = v1
         do -- (terminates control flow)
-            a7 = {}
-            a8 = 3
-            a9 = (#a2)
-            a10 = 1
+            v6 = {}
+            i1 = 3
+            v7 = (#v2)
             while true do
-                a10 = 1
-                a11 = (a8 - 1)
+                v9 = (i1 - 1)
             end
             do return  end
         end
-        a12 = w17
-        a13 = a2
-        a14 = a11
-        a12 = a12(a13, a14)
-        a12 = bit32.bxor(a12, a5)
-        a12 = w100[a12]
-        a7 = (a7 .. a12)
-        a12 = w124
-        a12 = (a12 * a5)
-        a13 = w92
-        a12 = (a12 + a13)
-        a5 = (a12 % 256)
-        a2 = a7
-        a5 = w21
-        a6 = a2
-        a7 = 2
-        a5 = a5(a6, a7)
-        a2 = a5
+        v10 = w17
+        v11 = v2
+        v12 = v9
+        v10 = v10(v11, v12)
+        v10 = bit32.bxor(v10, v4)
+        v10 = w100[v10]
+        v6 = (v6 .. v10)
+        v10 = w124
+        v10 = (v10 * v4)
+        v11 = w92
+        v10 = (v10 + v11)
+        v4 = (v10 % 256)
+        v2 = v6
+        v4 = w21
+        v5 = v2
+        v4 = v4(v5, v6)
+        v2 = v4
         while true do
-            a7[a9] = a12
-            a9 = (a9 + 1)
-            a10 = (a10 + 2)
+            v6[v7] = v10
+            v7 = (v7 + 1)
+            v8 = (v8 + 2)
         end
-        a12 = (a11 - 2)
-        a13 = w17
-        a14 = a2
-        a15 = a11
-        a13 = a13(a14, a15)
-        a13 = bit32.bxor(a13, a5)
-        a13 = w100[a13]
-        a7[a12] = a13
-        a12 = w124
-        a12 = (a12 * a5)
-        a13 = w92
-        a12 = (a12 + a13)
-        a5 = (a12 % 256)
-        a12 = (a12 .. a13)
-        a9 = 1
-        a6 = (#a2)
-        if not ((600 > a6)) then
-            a2 = (not a2)
+        v10 = (v9 - 2)
+        v11 = w17
+        v12 = v2
+        v13 = v9
+        v11 = v11(v12, v13)
+        v11 = bit32.bxor(v11, v4)
+        v11 = w100[v11]
+        v6[v10] = v11
+        v10 = w124
+        v10 = (v10 * v4)
+        v11 = w92
+        v10 = (v10 + v11)
+        v4 = (v10 % 256)
+        v10 = (v10 .. v11)
+        v5 = (#v2)
+        if not ((600 > v5)) then
+            v2 = (not v2)
         end
-        a7 = ""
-        a8 = 3
-        a9 = a6
-        a10 = 1
+        i1 = 3
+        v7 = v5
     end
-    w10 = 46
+    state = 46
     w37 = w1[34]
-    a41 = "status"
-    a38 = w6[a41]
-    w10 = 41
-    a131 = w55
-    a131()
+    v29 = "status"
+    v26 = t4[v29]
+    state = 41
+    v98 = w55
+    v98()
     w116 = w112
-    a117 = w16
+    v91 = w16
     w118 = w1[5]
-    w116(a117, w118)
+    w116(v91, w118)
 end
-while true do -- (empty spin loop: unrestructured dispatcher exit)
-end
+-- (empty spin loop: dispatcher exit the structurer could not
+--  recover; commented out -- it can never terminate on its own)
+-- while true do
+-- end
+-- (loader exit) opcode 38 is one of the junk ops: it tail-calls
+-- with operands the VM rewrites at run time, so the decoded form
+-- L14(L15) is what the bytes say, not proof of what runs.
+-- Either way this is the call that hands control to the payload.
+do return L14(L15) end

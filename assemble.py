@@ -447,6 +447,100 @@ def default_name(tid, i):
 def reg_name(tid, i):
     return NAME.get((tid, int(i))) or default_name(tid, int(i))
 
+# ---------------- role-based names ----------------
+# Most child protos contain no strings at all (they are numeric dispatcher
+# stubs), so names cannot be derived from content.  Instead each register is
+# named after the role it plays most often: table / key / number / string /
+# boolean / loop counter / function / generic value.
+ROLE_RANK = {'fn': 0, 't': 1, 'k': 2, 'n': 3, 's': 4, 'b': 5, 'i': 6, 'v': 7}
+ARITH = set('+ - * / % // ^ & | ~ << >>'.split())
+
+def _classify_roles(tid):
+    roles = {}
+
+    def bump(i, r, n=1):
+        d = roles.setdefault(int(i), {})
+        d[r] = d.get(r, 0) + n
+
+    def scan(x, ctx='any'):
+        if isinstance(x, tuple):
+            if x[0] == 'reg':
+                bump(x[1], ctx if ctx in ROLE_RANK else 'v')
+            elif x[0] == 'fld':
+                scan(x[1], 't')
+                scan(x[2], 'k')
+            elif x[0] == 'bin':
+                c = 's' if x[1] == '..' else ('n' if x[1] in ARITH else 'n')
+                scan(x[2], c)
+                scan(x[3], c)
+            elif x[0] == 'un':
+                scan(x[2], 'b' if str(x[1]).strip() == 'not' else 'n')
+            elif x[0] in ('callx',):
+                scan(x[1], 'fn')
+                for a in x[2]:
+                    scan(a)
+            elif x[0] == 'const':
+                pass
+            else:
+                for y in x[1:]:
+                    scan(y, ctx)
+        elif isinstance(x, list):
+            for y in x:
+                scan(y, ctx)
+
+    for e in decomp.decode_proto(tid):
+        kw = e.kw
+        f = kw.get('f')
+        if isinstance(f, tuple) and f[0] == 'reg' and e.kind in ('call', 'tailcall'):
+            bump(f[1], 'fn', 3)
+        if e.kind == 'forprep' and isinstance(kw.get('reg0'), (int, float)):
+            for j in range(int(kw['reg0']), int(kw['reg0']) + 3):
+                bump(j, 'i', 3)
+        if e.kind == 'varargs' and isinstance(kw.get('dst'), (int, float)):
+            bump(kw['dst'], 'v', 2)
+        for k, v in kw.items():
+            if k == 'obj':
+                scan(v, 't')
+            elif k == 'key':
+                scan(v, 'k')
+            elif k in ('f', 'dst', 'reg0', 'upv', 'size', 'count', 'target', 'op', 'P', 'txt'):
+                continue
+            else:
+                scan(v, 'any')
+    return roles
+
+ROLE = {t: _classify_roles(t) for t in protos}
+
+def _holds_nil_or_bool(tid, i):
+    for e in WRITERS.get(tid, {}).get(int(i), []):
+        if e.kind != 'assign':
+            continue
+        x = e.kw.get('expr')
+        if isinstance(x, tuple) and x[0] == 'const':
+            if x[1] is None:
+                return None          # untyped slot -> generic name
+            if isinstance(x[1], bool):
+                return 'b'
+    return False
+
+def role_letter(tid, i):
+    """dominant role of a register ('v' when it is used too many ways).
+
+    Names are a readability hint only -- every proto keeps its `-- F<n>` marker
+    so the generated name can always be mapped back to the bytecode."""
+    nb = _holds_nil_or_bool(tid, i)
+    if nb is None:
+        return 'v'
+    r = ROLE.get(tid, {}).get(int(i))
+    if not r:
+        return nb or 'v'
+    total = sum(r.values())
+    role, n = min(r.items(), key=lambda kv: (-kv[1], ROLE_RANK.get(kv[0], 7)))
+    if total < 2 or n / float(total) < 0.5:
+        return nb or 'v'
+    return nb or role
+
+
 # --- pass 1: which (owner, reg) pairs collide with a descendant's own name? ---
 RENAMED = set()
 for _t in protos:
@@ -477,6 +571,232 @@ POOL_REG = 1
 if POOL_PROTO in creators:
     RENAMED.add((POOL_PROTO, POOL_REG))
 
+# ---------------- semantic name suggestions ----------------
+# The original identifiers are gone for good (Luraph compiles to bytecode), so
+# these names are INFERRED from how each register is used.  Every proto keeps its
+# `-- F<n>` marker so the generated name can always be traced back.
+LUA_KEYWORDS = set("""and break continue do else elseif end false for function goto if in
+local nil not or repeat return then true until while self""".split())
+# names that already mean something in the emitted file / in Roblox
+GLOBAL_NAMES = set("""string table math task coroutine utf8 buffer debug os bit32
+game workspace script Instance Enum Vector2 Vector3 CFrame UDim UDim2 Color3
+Path2DControlPoint Random HttpService RunService StarterPlayer DataModel
+type select print next pairs ipairs error assert pcall xpcall setmetatable
+getmetatable require tonumber tostring unpack wait spawn delay ENV L14 L15""".split())
+# Roblox-ish words that are too generic to name a function after
+GENERIC_API = set("""Parent Name Size Value Frame Instance ClassName Workspace Folder
+ScreenGui Path2D Scale userdata number string table boolean EnumItem EnumType
+OuterBox HumanoidCollisionType DataModel Lua Luau Luraph""".split())
+VERBS = ('Get', 'Post', 'Wait', 'Is', 'Connect', 'Disconnect', 'Clone', 'Destroy',
+         'Shuffle', 'Next', 'Find', 'Load', 'Read', 'Write', 'Send', 'Create',
+         'Set', 'Add', 'Remove', 'Check', 'Request', 'From', 'Shuffle')
+
+def _lower_first(s):
+    return s[0].lower() + s[1:] if s else s
+
+def _ident(s):
+    """turn a string constant into a plausible Lua identifier, or None"""
+    if not isinstance(s, str):
+        return None
+    if not re.match(r'^[A-Za-z][A-Za-z0-9_]{2,23}$', s):
+        return None
+    if s in LUA_KEYWORDS:
+        return None
+    return _lower_first(s)
+
+def _safe(name, used):
+    """avoid keywords / globals / duplicates"""
+    if name in LUA_KEYWORDS or name in GLOBAL_NAMES:
+        name += 'Val'
+    while name in used:
+        name += '_'
+    return name
+
+# ---- what writes each register ----
+def _written_regs(e):
+    kw = e.kw
+    out = []
+
+    def add(i):
+        out.append(int(i))
+    d = kw.get('dst')
+    if isinstance(d, (int, float)):
+        add(d)
+        if e.kind == 'call':
+            for j in range(int(d) + 1, int(d) + max(int(kw.get('nret') or 0), 1)):
+                add(j)
+        if e.kind == 'self':
+            add(int(d) + 1)
+        if e.kind == 'coresume':
+            add(int(d) + 1)
+            add(int(d) + 2)
+    if e.kind == 'forprep' and isinstance(kw.get('reg0'), (int, float)):
+        for j in range(int(kw['reg0']), int(kw['reg0']) + 3):
+            add(j)
+    if e.kind == 'nilrange':
+        for j in range(int(kw['lo']), int(kw['hi']) + 1):
+            add(j)
+    return out
+
+WRITERS = {}
+VARARG_TAINT = {}
+for _t in protos:
+    w = {}
+    taint = None
+    for _e in decomp.decode_proto(_t):
+        if _e.kind in ('varargs', 'varargs_fixed') and isinstance(_e.kw.get('dst'), (int, float)):
+            taint = min(taint, int(_e.kw['dst'])) if taint is not None else int(_e.kw['dst'])
+        for _r in _written_regs(_e):
+            w.setdefault(_r, []).append(_e)
+    WRITERS[_t] = w
+    VARARG_TAINT[_t] = taint
+
+# ---- dispatcher state variable ----
+def _state_reg(tid):
+    """the register tested against numeric constants most often"""
+    cnt = {}
+    for e in decomp.decode_proto(tid):
+        if e.kind != 'test':
+            continue
+        c = e.kw.get('cond')
+        if not (isinstance(c, tuple) and c[0] == 'bin'):
+            continue
+        l, r = c[2], c[3]
+        if l[0] == 'reg' and r[0] == 'const' and isinstance(r[1], (int, float)):
+            cnt[int(l[1])] = cnt.get(int(l[1]), 0) + 1
+        elif r[0] == 'reg' and l[0] == 'const' and isinstance(l[1], (int, float)):
+            cnt[int(r[1])] = cnt.get(int(r[1]), 0) + 1
+    if not cnt:
+        return None
+    reg, n = max(cnt.items(), key=lambda kv: kv[1])
+    if n < 6:
+        return None
+    # a genuine dispatcher state: every store into it is an integer constant
+    for e in WRITERS.get(tid, {}).get(reg, []):
+        if e.kind != 'assign':
+            return None
+        x = e.kw.get('expr')
+        if not (isinstance(x, tuple) and x[0] == 'const'
+                and isinstance(x[1], (int, float)) and abs(float(x[1])) < 100000):
+            return None
+    return reg
+
+# ---- strings a proto touches (used to name functions) ----
+POOL_OWNER = (POOL_PROTO, POOL_REG)
+
+def _is_pool_base(tid, x):
+    """is `x` the constant-pool table as seen from proto `tid`?"""
+    if x == ('reg', POOL_REG) and tid == POOL_PROTO:
+        return True
+    if x[0] == 'upv':
+        return capture_owner(tid, x[1]) == POOL_OWNER
+    return False
+
+def _proto_api_strings(tid):
+    cnt = {}
+    for e in decomp.decode_proto(tid):
+        def scan(x):
+            if isinstance(x, tuple):
+                if x[0] == 'const' and isinstance(x[1], str):
+                    if re.match(r'^[A-Za-z][A-Za-z0-9_.]{2,31}$', x[1]):
+                        cnt[x[1]] = cnt.get(x[1], 0) + 1
+                elif x[0] == 'fld' and x[2][0] == 'const' and _is_pool_base(tid, x[1]):
+                    v = pool_value_str(int(x[2][1]))
+                    if isinstance(v, str):
+                        cnt[v] = cnt.get(v, 0) + 1
+                else:
+                    for y in x[1:]:
+                        scan(y)
+            elif isinstance(x, list):
+                for y in x:
+                    scan(y)
+        for v in e.kw.values():
+            scan(v)
+    return cnt
+
+def suggest_fn_name(tid):
+    """plausible name for a proto, from the Roblox API strings it uses"""
+    cnt = _proto_api_strings(tid)
+    if not cnt:
+        return None
+
+    def score(item):
+        s, n = item
+        verb = 100 if s.startswith(VERBS) else 0
+        generic = 0 if s in GENERIC_API else 50
+        return (verb + generic, n, len(s))
+    best = max(cnt.items(), key=score)
+    if best[1] < 2 and not best[0].startswith(VERBS):
+        return None
+    s = best[0].split('.')[-1]
+    if not re.match(r'^[A-Za-z][A-Za-z0-9_]{2,23}$', s):
+        return None
+    name = _lower_first(s)
+    if s.endswith(('Changed', 'Destroying')):
+        name = 'on' + s
+    return _safe(name, set())
+
+def suggest_reg_name(tid, i):
+    """name a register from the single value that is ever stored in it"""
+    if tid == POOL_PROTO and i == POOL_REG:
+        return None                      # keep the unique pool alias
+    taint = VARARG_TAINT.get(tid)
+    if taint is not None and i >= taint:
+        return None                      # vararg spill area: count unknown
+    ws = WRITERS.get(tid, {}).get(i)
+    if not ws:
+        return None
+
+    def value_of(e):
+        """the single value stored by this write, or None if it varies"""
+        if e.kind == 'closure':
+            ch = e.kw['child']
+            if isinstance(ch, (int, float)):
+                return ('fn', int(ch))
+            return None
+        if e.kind == 'assign':
+            x = e.kw.get('expr')
+            if not isinstance(x, tuple):
+                return None
+            if x[0] == 'const':
+                return ('str', x[1]) if isinstance(x[1], str) else None
+            if x[0] == 'fld' and x[1] == ('reg', POOL_REG) and x[2][0] == 'const':
+                v = pool_value_str(int(x[2][1]))
+                if isinstance(v, str):
+                    return ('str', v)
+                if v in ('string', 'table', 'math', 'task', 'coroutine', 'utf8',
+                         'buffer', 'debug'):
+                    return ('lib', v)
+            if x[0] == 'fld' and x[2][0] == 'const' and isinstance(x[2][1], str):
+                return ('str', x[2][1])
+        return None
+
+    vals = {value_of(e) for e in ws}
+    if len(vals) != 1 or None in vals:
+        return None
+    (kind, payload), = vals
+    if kind == 'fn':
+        return suggest_fn_name(payload)
+    if kind == 'lib':
+        return payload + 'Lib'
+    n = _ident(payload)
+    if n:
+        return n + 'Lib' if n in GLOBAL_NAMES else n
+    return None
+
+SUGGEST = {}
+for _t in protos:
+    _sr = _state_reg(_t)
+    for _i in sorted(OWN[_t]):
+        if _t == MAIN_TID and _i in (14, 15):
+            continue
+        if _sr is not None and _i == _sr and not (_t == POOL_PROTO and _i == POOL_REG):
+            SUGGEST[(_t, _i)] = 'state'
+            continue
+        _s = suggest_reg_name(_t, _i)
+        if _s:
+            SUGGEST[(_t, _i)] = _s
+
 # --- pass 2: assign names top-down (parents first) ---
 NAME = {}
 _bfs = [MAIN_TID]
@@ -505,15 +825,37 @@ for _t in _bfs:
     if _fn:
         FNAME[_t] = _fn
         _forb.add(_fn)
+    _used = set()
+    _counters = {}
     for _j in sorted(OWN[_t]):
+        _rl = role_letter(_t, _j)
+        if _rl is None:
+            _rolename = default_name(_t, _j)
+        else:
+            _counters[_rl] = _counters.get(_rl, 0) + 1
+            _rolename = f"{_rl}{_counters[_rl]}"
         _n = default_name(_t, _j)
         if _t == MAIN_TID and _j in (14, 15):
             NAME[(_t, _j)] = _n          # pool / scratch: names referenced by synth_pool
+            _used.add(_n)
             continue
-        if _n == _fn:
-            _n = f"{alt_letter(_t)}{_j}" 
-        if (_t, _j) in RENAMED or _n in _forb:
+        _cands = [_rolename]
+        if (_t, _j) in SUGGEST:
+            _cands.insert(0, SUGGEST[(_t, _j)])
+        if (_t, _j) in RENAMED:
+            _cands = [f"{alt_letter(_t)}{_j}"]      # unique name, never reused
+        _cands.append(f"{alt_letter(_t)}{_j}")
+        _n = None
+        for _c in _cands:
+            if _c in _forb or _c in _used or _c == _fn:
+                continue
+            if _c in LUA_KEYWORDS:
+                continue
+            _n = _safe(_c, _forb | _used)
+            break
+        if _n is None:
             _n = f"{alt_letter(_t)}{_j}"
+        _used.add(_n)
         NAME[(_t, _j)] = _n
 
 for _c, (_p, _i, _d) in creators.items():
@@ -663,6 +1005,11 @@ def synth_pool(lines):
         if m and (m.group(2)[:1] in (chr(39), chr(34)) or m.group(2).startswith('ENV')
                   or m.group(2).startswith('bit32') or re.match(r'^' + LIT + r'$', m.group(2))):
             pool[int(m.group(1))] = m.group(2)
+            continue
+        if s == f'{POOLREG} = {{}}':
+            # the `newtable` that creates the pool: already hoisted into the
+            # `local L14 = {}` declaration, and replaying it here would wipe
+            # every constant the block above just installed.
             continue
         if s == f'{reg_name(MAIN_TID, 15)} = {POOLREG}; {POOLREG} = {POOLREG}[0]':
             keep.append('-- (junk op: loader self-modifies operand stream here; real behavior = no-op)')
@@ -884,8 +1231,9 @@ def assemble():
                 if child in protos:
                     # emit the nested function at the marker line's own indent
                     emit_proto_into(newlines, child, len(mm.group(1)) // 4, mm.group(2))
-                    continue
-                newlines.append(L)   # unreachable, but keep the marker visible
+                else:
+                    newlines.append(L)
+                continue
             newlines.append(L)
         return newlines, upv_used
 
@@ -931,6 +1279,24 @@ def assemble():
     body = [x for x in body if '__init_params' not in x and '-- vararg count' not in x]
     body = fold_dispatch(body)
     out.extend(body)
+    # --- loader exit -------------------------------------------------------
+    # T2 ends with a tailcall (opcode 38) whose only entry edge is an
+    # unreachable `close`, so the structurer never attaches it to the tree and
+    # the main chunk would otherwise just build the payload and stop.
+    if not any(re.match(r'^do return\b', L) for L in out):
+        _ir2 = structurer.structure(MAIN_TID)[1]
+        _tc = [e for e in _ir2 if e.kind == 'tailcall']
+        if len(_tc) == 1:
+            CTX['tid'] = MAIN_TID
+            _f = expr2(_tc[0].kw['f'])
+            _args = ', '.join('...' if a[0] == 'spread' else expr2(a)
+                              for a in _tc[0].kw['args'])
+            CTX['tid'] = None
+            out.append('-- (loader exit) opcode 38 is one of the junk ops: it tail-calls')
+            out.append('-- with operands the VM rewrites at run time, so the decoded form')
+            out.append(f'-- {_f}({_args}) is what the bytes say, not proof of what runs.')
+            out.append('-- Either way this is the call that hands control to the payload.')
+            out.append(f'do return {_f}({_args}) end')
     return out
 
 # ---------------- structural cleanup ----------------
@@ -982,15 +1348,49 @@ def rename_kept_wrappers(lines):
             for L in lines]
 
 def mark_empty_spinloops(lines):
-    """`while true do end` with no body is a dispatcher loop whose body the
-    structurer could not recover (its exit edge is a junk-op jump target).
-    It is kept -- it is what the bytecode does -- but flagged."""
-    out = []
-    for i, L in enumerate(lines):
-        if L.strip() == 'while true do' and i + 1 < len(lines) and lines[i + 1].strip() == 'end':
-            out.append(L + ' -- (empty spin loop: unrestructured dispatcher exit)')
-            continue
-        out.append(L)
+    """Comment out the `while true do end` dispatcher stubs.
+
+    Their body is empty because the structurer could not attach the real exit
+    edge (a junk-op jump target).  A bodyless `while true` can never terminate,
+    so emitting it live would hang this file before the code after it runs.
+    The loop's matching `end` is located by depth, not by adjacency, so a
+    commented-out `if` inside cannot make this eat an enclosing block's `end`.
+    """
+    def _opens(s):
+        return (re.match(r'^(if|while|for)\b', s) and (s.endswith('then') or s.endswith('do'))) \
+            or s in ('do', 'repeat') \
+            or re.match(r'^(local\s+)?function\b', s) is not None \
+            or re.search(r'=\s*function\s*\(', s) is not None
+
+    def _code(s):
+        return re.split(r'\s--', s.strip(), 1)[0].strip()
+
+    out = list(lines)
+    i = 0
+    while i < len(out):
+        if _code(out[i]) == 'while true do':
+            depth = 1
+            j = i + 1
+            while j < len(out):
+                c = _code(out[j])
+                if c:
+                    if _opens(c):
+                        depth += 1
+                    elif c == 'end' or c.startswith('until '):
+                        depth -= 1
+                        if depth == 0:
+                            break
+                j += 1
+            if j < len(out) and depth == 0 and \
+                    all(not _code(x) for x in out[i + 1:j]):
+                ind = ' ' * (len(out[i]) - len(out[i].lstrip()))
+                out[i:j + 1] = [f'{ind}-- (empty spin loop: dispatcher exit the structurer could not',
+                                f'{ind}--  recover; commented out -- it can never terminate on its own)',
+                                f'{ind}-- while true do',
+                                f'{ind}-- end']
+                i += 4
+                continue
+        i += 1
     return out
 
 def drop_noise(lines):
@@ -1046,18 +1446,34 @@ if __name__ == '__main__':
 --   * L15          the payload closure (proto T8) built at the end of T2.
 --   * `X = function(...) -- F<n>`   nested VM proto with id n.
 --
--- Naming
---   * a1..aN       parameters of the enclosing proto (VM protos are vararg).
---   * L<n> / v<n>  a proto's own local registers, declared with `local` at the
---                  top of the function so nested protos capture them for real.
---   * A register that a nested proto captures is renamed to <letter><n> when its
---     default name would be shadowed inside that proto.
+-- Naming (all names below are GENERATED -- the original identifiers are not
+--   recoverable, a Luraph build only ships bytecode)
+--   * a<n>         parameter of the enclosing proto (VM protos are vararg).
+--   * fn<n>        register used as a call target (a function value).
+--   * t<n>         table / object that gets indexed.
+--   * k<n>         key used to index a table.
+--   * n<n>         number: arithmetic / comparison operand.
+--   * s<n>         string: concat / string-library operand.
+--   * b<n>         boolean.
+--   * i<n>         numeric `for` counter.
+--   * v<n>         value of mixed or unknown kind.
+--   * state        the VM dispatcher's state register inside a proto.
+--   * <x>Lib       a global library table (stringLib, mathLib, taskLib, ...).
+--
+--   The role letters are a readability hint inferred from how each register is
+--   used, not a claim about its runtime value.  Registers are declared with
+--   `local` at the top of their function so nested protos really capture them,
+--   and every proto keeps its `-- F<n>` marker.
 --
 -- Remaining VM artefacts (documented, not silently "fixed")
 --   * `UPVALS[i]`  upvalue read with a runtime-computed index.
 --   * `<pool>[5]`  the one constant-pool slot the runtime dump did not capture.
 --   * junk ops (op121/92/38/179) rewrite their operands at runtime; those few
 --     sites are commented instead of rendered.
+--   * Empty `while true do end` loops are dispatcher exits whose real outgoing
+--     edge is a junk-op jump.  They are commented out (a bodyless loop cannot
+--     terminate, so emitting them would hang this file before the payload runs).
+--   * The last line is the loader's exit tailcall -- see the comment above it.
 -- ============================================================================
 """
     ENV_PRELUDE = (

@@ -146,6 +146,56 @@ Static checks run alongside:
 | `UP120`, `UP324` | 2 | upvalue slot ids above the descriptor count — junk-op artifacts |
 | `while true do … end` with no break | ~40 | dispatcher loops whose exit edge is a junk-op jump target |
 
+## Generated identifier names (originals are unrecoverable)
+
+Luraph ships bytecode only, so no local name survives.  Registers are now named
+by the role they play in the bytecode instead of by slot number.  The pass lives
+in `assemble.py` (`_classify_roles`, `ROLE`, `role_letter`, `suggest_reg_name`):
+
+| name | inferred from |
+|---|---|
+| `fn<n>` | register used as a call target |
+| `t<n>`  | table/object that gets indexed |
+| `k<n>`  | key used to index a table |
+| `n<n>`  | arithmetic / comparison operand |
+| `s<n>`  | concat / string-library operand |
+| `b<n>`  | boolean (or assigned a boolean) |
+| `i<n>`  | numeric `for` counter |
+| `v<n>`  | mixed or unknown kind (incl. any register ever assigned `nil`) |
+| `state` | dispatcher state: every store is an int constant and it is compared against >= 6 numeric constants |
+| `<x>Lib` | global library table (`stringLib`, `mathLib`, `taskLib`) |
+
+Guards so a name is never actively misleading:
+
+* a register that is *ever* assigned `nil` falls back to the neutral `v<n>`.
+* a role letter is only used when one role covers >= 50% of the register's
+  classified uses (>= 2 uses); otherwise it is `v<n>`.
+* per-proto counters keep names unique; the `- F<n>` marker on every closure
+  still maps any name back to its proto and register.
+
+Verification: `/tmp/verify_names.py` reports 0 errors (no capture shadowed by a
+descendant, no duplicate names, no collisions with the reserved pool names), and
+`/tmp/lint2.py` still reports only the intended Roblox globals.
+
+## Two fidelity fixes found while wiring the names in
+
+1. **The constant pool was being wiped before the payload ran.**  T2's
+   `newtable` that creates the pool (IR 123) is hoisted into the
+   `local L14 = {}` declaration by `synth_pool`, but the in-body copy of that
+   line survived and re-assigned `L14 = {}` after all 178 constants had been
+   installed.  `synth_pool` now drops it.
+2. **The loader never called the payload.**  T2's exit tailcall (opcode 38,
+   IR 163) sits behind a `close` that is unreachable in the static CFG, so the
+   structurer never attached it and the output ended by *building* the payload
+   closure and stopping.  `assemble()` now emits it explicitly, with a comment
+   saying opcode 38 is a junk op so its operands may not be what really runs.
+   Empty `while true do end` dispatcher stubs (13) are now commented out rather
+   than emitted -- a bodyless loop cannot terminate and would hang the file
+   before that call.  Their matching `end` is found by depth, not adjacency, so
+   an eliminated `if` cannot make the pass eat an enclosing block's `end`.
+
+Current output: `deobf_full.lua` / `deobf_full.txt`, 5163 lines.
+
 ## Not done (§6.2 – §6.4)
 
 * Differential verification against the real loader run (needs a stubbed Roblox

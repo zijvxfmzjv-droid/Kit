@@ -22,6 +22,11 @@ bytecode** (~225 opcodes, binary-tree dispatch) interpreted by a small Lua VM. T
   calls have real argument lists and the constant pool is inlined as literals.
 - §6.1 (source-shaping) is done — see `CHANGES.md` for the itemised list of what
   changed and what is still open (§6.2-§6.4 are untouched).
+- On top of §6.1: registers now carry **generated** names by inferred role
+  (`fn/t/k/n/s/b/i/v`, plus `state` and `<x>Lib`), and two fidelity bugs were
+  fixed (the pool was being wiped right before the payload ran; the loader's
+  exit tailcall was dropped entirely, so nothing ever called the payload).
+  Details and the verification method are in `CHANGES.md`.
 
 ## 2. Quick start
 
@@ -191,7 +196,8 @@ Remaining polish:
 | `decomp.py` | pass-1 IR decoder (LINEFMT renderers, RN register naming) |
 | `structurer.py` | pass-2 control-flow structurer (loop_depth-aware) |
 | `assemble.py` | pass-3 assembler → deobf_full.lua (pool, closures, folding, sanitizers) |
-| `deobf_full.lua` | **current output — 5,838 lines, all 56 protos, compiles clean** |
+| `deobf_full.lua` | **current output — 5,163 lines, all 56 protos, compiles clean** |
+| `deobf_full.txt` | byte-identical plain-text copy (the hand-off artifact) |
 | `instrs.pkl` / `tables.pkl` / `protos.pkl` | extracted bytecode data |
 | `op_full2.pkl` / `op_full.txt` / `opcodemap.txt` / `isa_used.txt` | VM dispatch reference |
 | `qtest.luau` / `qtest.log` | Q-slot identity probes |
