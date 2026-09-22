@@ -262,11 +262,13 @@ def structure(tid):
                 T = e.target_ir
                 then_body = []
                 else_body = []
+                # the resume itself is a statement; the branch tests its ok flag
+                out.append(S('emit', e=e))
                 if T is not None and T > i:
                     parse(T, hi, then_body, depth + 1)
                 if i + 1 < hi:
                     parse(i + 1, hi, else_body, depth + 1)
-                out.append(S('ifelse', cond=('res', e.kw['dst']), then=then_body, els=else_body))
+                out.append(S('ifelse', cond=('reg', e.kw['dst']), then=then_body, els=else_body))
                 return
             if k == 'forrestore' or k == 'nop':
                 i += 1
@@ -278,8 +280,13 @@ def structure(tid):
     if ir:
         parse(0, N, stmts_out)
     # coverage sweep: reachable-but-unprocessed regions (scrambled chunks)
+    # NOTE: the try cap used to be 256, which silently truncated the sweep and
+    # dropped 9 closure-creation sites (T283/303/452/473/498/508/599/609/619) --
+    # those protos then had to be emitted as top-level "standalone" stubs with
+    # unresolved UP<n> upvalues.  Every reachable IR must be emitted, so the cap
+    # is now only a runaway guard.
     tries = 0
-    while tries < 256:
+    while tries < 1000000:
         tries += 1
         nxt = None
         for i in range(N):
@@ -341,10 +348,11 @@ def render_stmts(stmts, ind, upvals_used, closures_used):
             lines.extend(render_stmts(st.kw['body'], ind + 1, upvals_used, closures_used))
             lines.append(f"{pad}end")
         elif k == 'repeat':
-            lines.append(f"{pad}while true do -- repeat")
+            # the loop-back test jumps back while it holds, so `repeat body until
+            # not cond` is the source-level shape
+            lines.append(f"{pad}repeat")
             lines.extend(render_stmts(st.kw['body'], ind + 1, upvals_used, closures_used))
-            lines.append(f"{pad}    if not ({render_expr(st.kw['cond'])}) then break end")
-            lines.append(f"{pad}end")
+            lines.append(f"{pad}until not ({render_expr(st.kw['cond'])})")
         elif k == 'fornum':
             v = st.kw['var']
             lines.append(f"{pad}for __v{v}, __l{v}, __s{v} in __foriter do -- numeric for (regs R{v}..R{v+2})")
@@ -371,7 +379,13 @@ def render_ir(e, ind, upvals_used, closures_used):
     f = decomp.LINEFMT.get(e.kind)
     if e.kind == 'closure':
         closures_used.append(e.kw)
-        return [f"{pad}{decomp.expr_str(('reg', e.kw['dst']))} = T{e.kw['child']}() -- closure"]
+        child = e.kw['child']
+        if not isinstance(child, (int, float)) or int(child) not in decomp.protos:
+            # junk op: the operand stream is rewritten at runtime, so the child
+            # proto id was never statically decoded.  The assignment cannot be
+            # reproduced -- keep it as a comment instead of a call to a nil global.
+            return [f"{pad}-- (junk closure op at instr {e.p0}: child proto not statically decoded)"]
+        return [f"{pad}{decomp.expr_str(('reg', e.kw['dst']))} = T{int(child)}() -- closure"]
     if e.kind == 'getupval':
         upvals_used.add(e.kw['upv'])
         return [f"{pad}{decomp.RN(e.kw['dst'])} = {render_expr(('upv', e.kw['upv']))}"]
@@ -381,7 +395,9 @@ def render_ir(e, ind, upvals_used, closures_used):
     if e.kind == 'setupval_field':
         upvals_used.add(e.kw['upv'])
         return [f"{pad}{render_expr(('upv', e.kw['upv']))}[{render_expr(e.kw['key'])}] = {render_expr(e.kw['val'])}"]
-    if e.kind == 'nop':
+    if e.kind == 'raw':
+        return [f"{pad}{e.kw['txt']}"]
+    if e.kind in ('nop', 'consumed'):
         return []
     if f is None:
         return [f"{pad}<?{e.kind}>"]
